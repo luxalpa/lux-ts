@@ -55,20 +55,16 @@ export class Context {
     parent?: Context;
     types: Map<string, TypeNode>;
     variables: Map<string, TypeNode>;
-    childNamespaces: Map<string, Context>;
     owner: Function | Class;
 
     constructor(parent?: Context) {
         this.types = new Map<string, TypeNode>();
         this.variables = new Map<string, TypeNode>();
-        this.childNamespaces = new Map<string, Context>();
         this.parent = parent;
     }
 
     addSubContext(name: string): Context {
-        let ctx = new Context(this);
-        this.childNamespaces.set(name, ctx);
-        return ctx;
+        return new Context(this);
     }
 
     addType(name: string, type: TypeNode) {
@@ -76,7 +72,7 @@ export class Context {
         map.set(name, type);
     }
 
-    getType(name: string,): TypeNode {
+    getType(name: string): TypeNode {
         let map = this.types;
         if (this.parent && !map) {
             return this.parent.getType(name);
