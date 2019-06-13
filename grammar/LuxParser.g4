@@ -45,7 +45,7 @@ typeDef
     ;
 
 fnDef
-    : fnType fnReturnType? scope
+    : fnType fnReturnType? scope?
     ;
 
 scope
@@ -58,7 +58,7 @@ classScope
 
 classScopeDec
     : taggedDeclaration                   # classScopeDecNormal
-    | tags? ID classScope                 # classScopeDecInterface
+    | 'inherit' ID                        # classScopeInherit
     ;
 
 fnType
@@ -88,7 +88,6 @@ fnCallParam
 
 vtype
     : vtype '.' plainType                 # typeInType
-    | '#' ns=ID '.' vtype                 # namespacedType
     | '&' fnType fnReturnType             # typeFunctionPtr
     | '&' plainType                       # typeRef
     | plainType                           # typePlain

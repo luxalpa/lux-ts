@@ -78,6 +78,7 @@ GOTO: 'goto';
 FOR: 'for';
 MATCH: 'match';
 ENUM: 'enum';
+INHERIT: 'inherit';
 
 STRING
    : '"' (ESC | ~ ["\\])* '"'

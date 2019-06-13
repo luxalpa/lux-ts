@@ -1,7 +1,7 @@
 import {LuxParserVisitor} from "../parser-ts/LuxParserVisitor";
 import {
     AssignStmtContext,
-    BracketExprContext, ClassDecContext, ClassScopeDecInterfaceContext, ClassScopeDecNormalContext,
+    BracketExprContext, ClassDecContext, ClassScopeInheritContext, ClassScopeDecNormalContext,
     DecStmtContext,
     EnumDecContext,
     EnumEntryPlainContext,
@@ -15,7 +15,7 @@ import {
     ImplFnCallExprContext,
     InfixExprContext,
     LuxParser,
-    LvalueIDContext, MemberExprContext, NamespacedTypeContext,
+    LvalueIDContext, MemberExprContext,
     NumberEContext, ObjectLiteralExprContext,
     PlainTypeContext,
     ProgramContext,
@@ -150,12 +150,6 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         return this.visit(ctx.plainType());
     }
 
-    visitNamespacedType(ctx: NamespacedTypeContext): ast.TypeNode {
-        let tnode = this.visit(ctx.vtype()) as ast.TypeNode;
-        tnode.namespace = ctx._ns.text;
-        return tnode;
-    }
-
     visitPlainType(ctx: PlainTypeContext) {
         return create(ast.TypeNode, {
             name: ctx.ID().text
@@ -194,12 +188,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
             returns = this.visit(retctx);
         }
 
+        let scope = ctx.fnDef().scope();
+
         return create(ast.FunctionDecNode, {
             name: create(ast.IdentifierNode, {
                 name: ctx.ID().text
             }),
             params: ctx.fnDef().fnType().fnDefParam().map(param => this.visit(param) as ast.VarDecNode),
-            body: this.visit(ctx.fnDef().scope()) as ast.ScopeNode,
+            body: scope ? this.visit(scope) as ast.ScopeNode : null,
             returns,
             tags: []
         })
@@ -268,11 +264,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         return this.visit(ctx.taggedDeclaration());
     }
 
-    visitClassScopeDecInterface(ctx: ClassScopeDecInterfaceContext): ast.InterfaceImplementNode {
-        return create(ast.InterfaceImplementNode, {
-            name: create(ast.IdentifierNode, {name: ctx.ID().text}),
-            declarations: ctx.classScope().classScopeDec().map(v => this.visit(v)),
-            tags: []
+    visitClassScopeInherit(ctx: ClassScopeInheritContext): ast.InheritNode {
+        return create(ast.InheritNode, {
+            className: create(ast.IdentifierNode, {name: ctx.ID().text}),
         })
     }
 

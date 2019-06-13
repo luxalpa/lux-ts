@@ -15,10 +15,6 @@ export class Integer implements TypeNode {
 
 }
 
-export class ASTType implements TypeNode {
-
-}
-
 export class Function implements TypeNode {
     name: string;
     parameters: TypeNode[];
@@ -28,7 +24,9 @@ export class Function implements TypeNode {
 
 export class Class implements TypeNode {
     name: string;
-    members: Context
+    members: Context;
+    inherits: Class[];
+    abstract: boolean;
 }
 
 export class MetaType implements TypeNode {
@@ -39,7 +37,6 @@ export class MetaType implements TypeNode {
 export class Inferred implements TypeNode {
     expr: ast.ExprNode;
     context: Context;
-    resolved?: TypeNode;
 }
 
 // SemiInferred types need to still be typechecked
@@ -52,37 +49,6 @@ export class SemiInferred implements TypeNode {
 export class ObjectLiteral implements TypeNode {
     entries: ObjectLiteralEntry[];
     resolved?: Class;
-
-    resolve(type: TypeNode) {
-        if (type instanceof Class) {
-            for (let entry of this.entries) {
-                let target = type.members.getVariable(entry.key);
-                if (target !== entry.value) {
-                    throw new Error("type mismatch in object literal");
-                }
-            }
-            this.resolved = type;
-            return;
-        } else {
-            throw new Error("Object literal can only be cast to classes!")
-        }
-
-    }
-}
-
-export class InterfaceImplementation {
-    context: Context;
-    interface: TypeNode;
-}
-
-function isOfType<T>(source: TypeNode, type: { new(...args: any[]): T; }): source is T {
-    if (source instanceof type) {
-        return true
-    }
-    if (source instanceof ObjectLiteral) {
-        return source.resolved instanceof type
-    }
-    return false
 }
 
 export class ObjectLiteralEntry {
@@ -95,9 +61,7 @@ export class Context {
     types: Map<string, TypeNode>;
     variables: Map<string, TypeNode>;
     childNamespaces: Map<string, Context>;
-    belongsToFunction: Function;
-    fieldOrder: string[];
-    interfaceImplementations: Map<TypeNode, InterfaceImplementation>;
+    owner: Function | Class;
     namespacedTypes: Map<string, Map<string, TypeNode>>;
 
     constructor(parent?: Context) {
@@ -105,9 +69,7 @@ export class Context {
         this.variables = new Map<string, TypeNode>();
         this.childNamespaces = new Map<string, Context>();
         this.parent = parent;
-        this.fieldOrder = [];
         this.namespacedTypes = new Map<string, Map<string, TypeNode>>();
-        this.interfaceImplementations = new Map<string, InterfaceImplementation>();
     }
 
     addSubContext(name: string): Context {
@@ -152,9 +114,6 @@ export class Context {
             throw new Error(`Type ${name} is already defined`)
         }
         this.variables.set(name, type);
-        if (!(type instanceof Function)) {
-            this.fieldOrder.push(name);
-        }
     }
 
     getVariable(name: string): TypeNode {

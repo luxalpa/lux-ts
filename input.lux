@@ -4,6 +4,8 @@ MyEnum: enum {
 }
 
 Dragon: class {
+    inherit Creature
+
     age: Integer
     name: Integer
 
@@ -17,11 +19,13 @@ Dragon: class {
         return [name: 100]
     }
 
-    Creature {
-        attack: () => {
-            console.log(12)
-        }
+    attack: () => {
+        console.log(12)
     }
+}
+
+Iterator: class {
+    next: () => Integer
 }
 
 Creature: class {
@@ -29,10 +33,6 @@ Creature: class {
     attack: () => {
         console.log(10)
     }
-}
-
-create: (t: #ast.Type) => {
-
 }
 
 main: (input: Integer) => Integer {

@@ -7,7 +7,6 @@ import { FnDefParamFullContext } from "./LuxParser";
 import { FnDefParamOnlyTypeContext } from "./LuxParser";
 import { FnDefParamSkipContext } from "./LuxParser";
 import { TypeInTypeContext } from "./LuxParser";
-import { NamespacedTypeContext } from "./LuxParser";
 import { TypeFunctionPtrContext } from "./LuxParser";
 import { TypeRefContext } from "./LuxParser";
 import { TypePlainContext } from "./LuxParser";
@@ -29,7 +28,7 @@ import { ImplFnCallExprContext } from "./LuxParser";
 import { ObjectLiteralExprContext } from "./LuxParser";
 import { FnReturnTypeSingleContext } from "./LuxParser";
 import { ClassScopeDecNormalContext } from "./LuxParser";
-import { ClassScopeDecInterfaceContext } from "./LuxParser";
+import { ClassScopeInheritContext } from "./LuxParser";
 import { VarDecContext } from "./LuxParser";
 import { TypeDecContext } from "./LuxParser";
 import { LvalueIDContext } from "./LuxParser";
@@ -104,14 +103,6 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitTypeInType?: (ctx: TypeInTypeContext) => Result;
-
-	/**
-	 * Visit a parse tree produced by the `namespacedType`
-	 * labeled alternative in `LuxParser.vtype`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitNamespacedType?: (ctx: NamespacedTypeContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `typeFunctionPtr`
@@ -282,12 +273,12 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitClassScopeDecNormal?: (ctx: ClassScopeDecNormalContext) => Result;
 
 	/**
-	 * Visit a parse tree produced by the `classScopeDecInterface`
+	 * Visit a parse tree produced by the `classScopeInherit`
 	 * labeled alternative in `LuxParser.classScopeDec`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	visitClassScopeDecInterface?: (ctx: ClassScopeDecInterfaceContext) => Result;
+	visitClassScopeInherit?: (ctx: ClassScopeInheritContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `varDec`

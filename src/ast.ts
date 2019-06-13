@@ -59,7 +59,7 @@ export class DeclarationNode extends StatementNode {
 export class FunctionDecNode extends DeclarationNode {
     name: IdentifierNode;
     params: VarDecNode[];
-    body: ScopeNode;
+    body?: ScopeNode;
     returns: TypeNode;
     tags: TagNode[];
 }
@@ -102,8 +102,6 @@ export class ProgramNode extends Node {
     declarations: DeclarationNode[]
 }
 
-export class InterfaceImplementNode extends DeclarationNode {
-    name: IdentifierNode;
-    declarations: DeclarationNode[];
-    tags: TagNode[];
+export class InheritNode extends DeclarationNode {
+    className: IdentifierNode;
 }

@@ -1,11 +1,12 @@
 import * as ast from "./ast";
 import * as types from "./typenodes";
 import {create} from "./util";
-import {InterfaceImplementation} from "./typenodes";
 
 type TypeMap = Map<ast.Node, types.TypeNode>;
 
 export class TypeChecker {
+    instancedClasses: types.Class[] = [];
+
     constructor(private tree: ast.ProgramNode) {
 
     }
@@ -15,15 +16,30 @@ export class TypeChecker {
         let typeResolver = new TypeResolver(this.tree, typeMap);
         let mainCtx = typeResolver.check();
 
-
         this.addExternals(mainCtx);
         for(let fn of typeResolver.functions) {
-            for(let stmt of fn.body.statements) {
-                this.visit(stmt, fn.context, typeMap);
+            if(!fn.body) {
+                let cl = fn.context.parent.owner;
+                if(cl instanceof types.Class) {
+                    cl.abstract = true;
+                }
+            } else {
+                for(let stmt of fn.body.statements) {
+                    this.visit(stmt, fn.context, typeMap);
+                }
             }
         }
 
+        for(let c of this.instancedClasses) {
+
+        }
+
         return typeMap
+    }
+
+    // Make sure we don't instantiate abstract classes
+    checkInterfaces() {
+
     }
 
     addExternals(context: types.Context) {
@@ -38,6 +54,7 @@ export class TypeChecker {
         context.addVariable("console", create(types.Class, {
             name: "console",
             members: cc,
+            inherits: [],
         }));
     }
 
@@ -68,7 +85,7 @@ export class TypeChecker {
                 let t = typemap.get(n.init);
 
                 if(t instanceof types.ObjectLiteral) {
-                    t.resolve(type);
+                    this.resolve(t, type);
                     t = t.resolved;
                 }
 
@@ -110,7 +127,7 @@ export class TypeChecker {
     visitMemberExprNode(n: ast.MemberExprNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.object, context, typeMap);
         let t: types.TypeNode = typeMap.get(n.object) as types.Class;
-        if(t == null || t.constructor !== types.Class) {
+        if(t.constructor !== types.Class) {
             if(t.constructor === types.MetaType) {
                 let v = (t as types.MetaType).type;
                 switch(v.constructor) {
@@ -139,7 +156,7 @@ export class TypeChecker {
                     }
                 }
             } else {
-                throw "Member expression on non-class type"
+                throw new Error("Member expression on non-class type");
             }
         } else {
             let v = (t as types.Class).members.getVariable(n.property);
@@ -174,7 +191,7 @@ export class TypeChecker {
 
     visitReturnStatementNode(n: ast.ReturnStatementNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.expr, context, typeMap);
-        if(!isTypeEqual(context.belongsToFunction.returns, typeMap.get(n.expr))) {
+        if(!this.isTypeEqual((<types.Function>context.owner).returns, typeMap.get(n.expr))) {
             throw "Return value doesn't match to function"
         }
     }
@@ -194,18 +211,36 @@ export class TypeChecker {
 
         typeMap.set(n, literal);
     }
-}
 
-function isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
-    if(weak instanceof types.ObjectLiteral) {
-        if(weak.resolved) {
-            weak = weak.resolved;
+    isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
+        if(weak instanceof types.ObjectLiteral) {
+            if(weak.resolved) {
+                weak = weak.resolved;
+            } else {
+                this.resolve(weak, strong);
+                return true;
+            }
+        }
+        return strong === weak;
+    }
+
+    resolve(object: types.ObjectLiteral, type: types.TypeNode) {
+        if (type instanceof types.Class) {
+            for (let entry of object.entries) {
+                let target = type.members.getVariable(entry.key);
+                if (target !== entry.value) {
+                    throw new Error("type mismatch in object literal");
+                }
+            }
+            object.resolved = type;
+            this.instancedClasses.push(type);
+            return;
         } else {
-            weak.resolve(strong);
-            return true;
+            throw new Error("Object literal can only be cast to classes!")
         }
     }
-    return strong === weak;
+
+
 }
 
 interface FunctionCheck {
@@ -241,10 +276,13 @@ class TypeResolver {
         let globalCheck: ClassCheck = {context, declarations: []};
         this.tree.declarations.forEach(n => {
             if(n instanceof ast.ClassDecNode) {
-                let cl = create(types.Class, {
+                let cl: types.Class = create(types.Class, {
                     name: n.name.name,
-                    members: context.addSubContext(n.name.name)
+                    members: context.addSubContext(n.name.name),
+                    inherits: [],
+                    abstract: false,
                 });
+                cl.members.owner = cl;
                 this.typemap.set(n, cl);
                 context.addType(n.name.name, cl);
                 classChecks.push({
@@ -275,7 +313,6 @@ class TypeResolver {
 
     addCompilerTypes(context: types.Context) {
         context.addType("Integer", new types.Integer);
-        context.addType("Type", new types.ASTType, "ast");
     }
 
     visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
@@ -297,7 +334,7 @@ class TypeResolver {
             isStatic,
         });
 
-        ctx.belongsToFunction = fnType;
+        ctx.owner = fnType;
         this.functions.push({
             context: ctx,
             fn: fnType,
@@ -322,16 +359,13 @@ class TypeResolver {
         context.addVariable(n.left.name, type);
     }
 
-    visitInterfaceImplementNode(n: ast.InterfaceImplementNode, context: types.Context) {
-        let type = context.getType(n.name.name);
-        let ctx = context.addSubContext(n.name.name);
-        for (let declaration of n.declarations) {
-            this.visit(declaration, ctx)
+    visitInheritNode(n: ast.InheritNode, context: types.Context) {
+        let type = context.getType(n.className.name);
+        if(!(type instanceof types.Class)) {
+            throw new Error(`${type.constructor.name} is not a Class`);
         }
-        context.interfaceImplementations.set(type, create(InterfaceImplementation, {
-            context: ctx,
-            interface: type,
-        }))
+        (<types.Class>context.owner).inherits.push(type);
+        this.typemap.set(n.className, type);
     }
 
     addTypeChecked(expr: ast.ExprNode, context: types.Context, forcedType: types.TypeNode): types.TypeNode {
