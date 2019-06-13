@@ -314,7 +314,7 @@ class TypeResolver {
         let fnType = create(types.Function, {
             name: n.name.name,
             parameters: n.params.map(value => {
-                return context.getType(value.type.name, value.type.namespace)
+                return context.getType(value.type.name)
             }),
             returns: n.returns ? context.getType(n.returns.name) : null,
             isStatic,
@@ -335,7 +335,7 @@ class TypeResolver {
         let type: types.TypeNode;
 
         if (n.type) {
-            type = context.getType(n.type.name, n.type.namespace);
+            type = context.getType(n.type.name);
             if (n.init) {
                 this.addTypeChecked(n.init, context, type);
             }

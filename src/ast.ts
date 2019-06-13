@@ -96,7 +96,6 @@ export class EnumEntryNode extends Node {
 
 export class TypeNode extends Node {
     name?: string;
-    namespace?: string;
 }
 
 export class ProgramNode extends Node {

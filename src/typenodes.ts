@@ -57,14 +57,12 @@ export class Context {
     variables: Map<string, TypeNode>;
     childNamespaces: Map<string, Context>;
     owner: Function | Class;
-    namespacedTypes: Map<string, Map<string, TypeNode>>;
 
     constructor(parent?: Context) {
         this.types = new Map<string, TypeNode>();
         this.variables = new Map<string, TypeNode>();
         this.childNamespaces = new Map<string, Context>();
         this.parent = parent;
-        this.namespacedTypes = new Map<string, Map<string, TypeNode>>();
     }
 
     addSubContext(name: string): Context {
@@ -73,33 +71,22 @@ export class Context {
         return ctx;
     }
 
-    addType(name: string, type: TypeNode, namespace?: string) {
+    addType(name: string, type: TypeNode) {
         let map = this.types;
-        if(namespace) {
-            map = this.namespacedTypes.get(namespace);
-            if(!map) {
-                map = new Map<string, TypeNode>();
-                this.namespacedTypes.set(namespace, map);
-            }
-        }
         map.set(name, type);
     }
 
-    getType(name: string, namespace?: string): TypeNode {
-        let map = namespace ? this.namespacedTypes.get(namespace) : this.types;
+    getType(name: string,): TypeNode {
+        let map = this.types;
         if (this.parent && !map) {
-            return this.parent.getType(name, namespace);
-        }
-        if(!map) {
-            throw new Error(`Namespace "${namespace}" not found`);
+            return this.parent.getType(name);
         }
         let t = map.get(name);
         if (!t && this.parent) {
-            return this.parent.getType(name, namespace);
+            return this.parent.getType(name);
         }
         if (!t) {
-            let str = namespace ? ` on namespace "${namespace}"` : "";
-            throw new Error(`Type "${name}" not found` + str);
+            throw new Error(`Type "${name}" not found`);
         }
         return t;
     }
