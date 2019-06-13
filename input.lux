@@ -24,7 +24,7 @@ Dragon: class {
     }
 }
 
-Iterator: class {
+Iterator: class<T: Type> {
     next: () => Integer
 }
 

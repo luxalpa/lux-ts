@@ -5,8 +5,6 @@ import {create} from "./util";
 type TypeMap = Map<ast.Node, types.TypeNode>;
 
 export class TypeChecker {
-    instancedClasses: types.Class[] = [];
-
     constructor(private tree: ast.ProgramNode) {
 
     }
@@ -30,16 +28,7 @@ export class TypeChecker {
             }
         }
 
-        for(let c of this.instancedClasses) {
-
-        }
-
         return typeMap
-    }
-
-    // Make sure we don't instantiate abstract classes
-    checkInterfaces() {
-
     }
 
     addExternals(context: types.Context) {
@@ -233,7 +222,6 @@ export class TypeChecker {
                 }
             }
             object.resolved = type;
-            this.instancedClasses.push(type);
             return;
         } else {
             throw new Error("Object literal can only be cast to classes!")
@@ -255,14 +243,12 @@ interface ClassCheck {
 }
 
 class TypeResolver {
-    inferredVariables: types.Inferred[];
     toBeChecked: types.SemiInferred[];
     functions: FunctionCheck[];
     typemap: TypeMap;
 
 
     constructor(private tree: ast.ProgramNode, typemap: TypeMap) {
-        this.inferredVariables = [];
         this.toBeChecked = [];
         this.functions = [];
         this.typemap = typemap;
@@ -354,7 +340,7 @@ class TypeResolver {
                 this.addTypeChecked(n.init, context, type);
             }
         } else {
-            type = this.addInferred(n.init, context);
+            throw new Error("Init types are not yet supported");
         }
         context.addVariable(n.left.name, type);
     }
@@ -375,15 +361,6 @@ class TypeResolver {
             forcedType,
         });
         this.toBeChecked.push(inf);
-        return inf;
-    }
-
-    addInferred(expr: ast.ExprNode, context: types.Context): types.Inferred {
-        let inf = create(types.Inferred, {
-            expr,
-            context
-        });
-        this.inferredVariables.push(inf);
         return inf;
     }
 

@@ -39,9 +39,9 @@ declaration
     ;
 
 typeDef
-    : ID ':' fnDef                        # funcDec
-    | ID ':' 'enum' enumScope             # enumDec
-    | ID ':' 'class' classScope           # classDec
+    : ID ':' fnDef                                 # funcDec
+    | ID ':' 'enum' enumScope                      # enumDec
+    | ID ':' 'class' tmplDefParamList? classScope  # classDec
     ;
 
 fnDef
@@ -84,6 +84,16 @@ fnCallParams
 fnCallParam
     : '%'? expr
     | '_'
+    ;
+
+tmplDefParamList
+    : '<' ENDL* tmplDefParam (delim tmplDefParam)* ENDL* '>'
+    ;
+
+tmplDefParam
+    : varDef                              # tmplDefParamFull
+    | ':' vtype                           # tmplDefParamOnlyType
+    | '_'                                 # tmplDefParamSkip
     ;
 
 vtype

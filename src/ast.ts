@@ -85,7 +85,8 @@ export class EnumDecNode extends DeclarationNode {
 
 export class ClassDecNode extends DeclarationNode {
     name: IdentifierNode;
-    declarations: DeclarationNode[]
+    declarations: DeclarationNode[];
+    templateParams: VarDecNode[];
 }
 
 export class EnumEntryNode extends Node {

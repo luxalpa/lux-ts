@@ -25,12 +25,12 @@ import {
     TypePlainContext,
     VarDecContext, VarDefAssignExplicitContext,
     VarDefAssignImplicitContext,
-    VarDefOnlyContext
+    VarDefOnlyContext, TmplDefParamFullContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
 import {create} from "./util";
-import {ExprNode} from "./ast";
+import {VarDecNode} from "./ast";
 
 export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     visitInfixExpr(ctx: InfixExprContext): ast.Node {
@@ -57,7 +57,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     visitImplFnCallExpr(ctx: ImplFnCallExprContext): ast.FunctionCallExprNode {
         return create(ast.FunctionCallExprNode, {
             fn: this.visit(ctx.expr()),
-            params: ctx.fnCallParams() ? this.visit(ctx.fnCallParams()) as ExprNode[] : [],
+            params: ctx.fnCallParams() ? this.visit(ctx.fnCallParams()) as ast.ExprNode[] : [],
         })
     }
 
@@ -253,11 +253,22 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
     visitClassDec(ctx: ClassDecContext): ast.ClassDecNode {
         let decs = ctx.classScope().classScopeDec();
+        let templateParams: ast.VarDecNode[] = [];
+
+        if(ctx.tmplDefParamList()) {
+            let defParams = ctx.tmplDefParamList().tmplDefParam();
+            templateParams = defParams.map<ast.VarDecNode>(dec => this.visit(dec));
+        }
 
         return create(ast.ClassDecNode, {
             name: create(ast.IdentifierNode, {name: ctx.ID().text}),
             declarations: decs.map(dec => this.visit(dec)),
+            templateParams
         })
+    }
+
+    visitTmplDefParamFull(ctx: TmplDefParamFullContext): ast.VarDecNode {
+        return this.visit(ctx.varDef()) as ast.VarDecNode;
     }
 
     visitClassScopeDecNormal(ctx: ClassScopeDecNormalContext): ast.DeclarationNode {

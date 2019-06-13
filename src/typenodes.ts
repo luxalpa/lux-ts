@@ -34,11 +34,6 @@ export class MetaType implements TypeNode {
     }
 }
 
-export class Inferred implements TypeNode {
-    expr: ast.ExprNode;
-    context: Context;
-}
-
 // SemiInferred types need to still be typechecked
 export class SemiInferred implements TypeNode {
     expr: ast.ExprNode;

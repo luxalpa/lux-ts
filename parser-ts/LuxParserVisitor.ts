@@ -32,6 +32,9 @@ import { ClassScopeInheritContext } from "./LuxParser";
 import { VarDecContext } from "./LuxParser";
 import { TypeDecContext } from "./LuxParser";
 import { LvalueIDContext } from "./LuxParser";
+import { TmplDefParamFullContext } from "./LuxParser";
+import { TmplDefParamOnlyTypeContext } from "./LuxParser";
+import { TmplDefParamSkipContext } from "./LuxParser";
 import { VarDefAssignImplicitContext } from "./LuxParser";
 import { VarDefOnlyContext } from "./LuxParser";
 import { VarDefAssignExplicitContext } from "./LuxParser";
@@ -54,6 +57,8 @@ import { FnDefParamContext } from "./LuxParser";
 import { FnReturnTypeContext } from "./LuxParser";
 import { FnCallParamsContext } from "./LuxParser";
 import { FnCallParamContext } from "./LuxParser";
+import { TmplDefParamListContext } from "./LuxParser";
+import { TmplDefParamContext } from "./LuxParser";
 import { VtypeContext } from "./LuxParser";
 import { PlainTypeContext } from "./LuxParser";
 import { VarDefContext } from "./LuxParser";
@@ -305,6 +310,30 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitLvalueID?: (ctx: LvalueIDContext) => Result;
 
 	/**
+	 * Visit a parse tree produced by the `tmplDefParamFull`
+	 * labeled alternative in `LuxParser.tmplDefParam`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplDefParamFull?: (ctx: TmplDefParamFullContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `tmplDefParamOnlyType`
+	 * labeled alternative in `LuxParser.tmplDefParam`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplDefParamOnlyType?: (ctx: TmplDefParamOnlyTypeContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `tmplDefParamSkip`
+	 * labeled alternative in `LuxParser.tmplDefParam`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplDefParamSkip?: (ctx: TmplDefParamSkipContext) => Result;
+
+	/**
 	 * Visit a parse tree produced by the `varDefAssignImplicit`
 	 * labeled alternative in `LuxParser.varDef`.
 	 * @param ctx the parse tree
@@ -461,6 +490,20 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitFnCallParam?: (ctx: FnCallParamContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `LuxParser.tmplDefParamList`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplDefParamList?: (ctx: TmplDefParamListContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `LuxParser.tmplDefParam`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplDefParam?: (ctx: TmplDefParamContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `LuxParser.vtype`.
