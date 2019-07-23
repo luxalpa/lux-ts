@@ -25,7 +25,7 @@ import {
     TypePlainContext,
     VarDecContext, VarDefAssignExplicitContext,
     VarDefAssignImplicitContext,
-    VarDefOnlyContext, TmplDefParamFullContext
+    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -152,8 +152,19 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
     visitPlainType(ctx: PlainTypeContext) {
         return create(ast.TypeNode, {
-            name: ctx.ID().text
+            name: ctx.ID().text,
+            templateParams: ctx.tmplParam().map(p => this.visit(p))
         })
+    }
+
+    visitTmplParam(ctx: TmplParamContext): ast.TypeNode | ast.ExprNode {
+        if(ctx.expr()) {
+            return this.visit(ctx.expr());
+        } else if(ctx.vtype()) {
+            return this.visit(ctx.vtype());
+        } else {
+            throw new Error("TmplParam of unknown kind");
+        }
     }
 
     visitIdentifierExpr(ctx: IdentifierExprContext): ast.IdentifierExprNode {
@@ -252,11 +263,11 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     visitClassDec(ctx: ClassDecContext): ast.ClassDecNode {
-        let decs = ctx.classScope().classScopeDec();
+        const decs = ctx.classScope().classScopeDec();
         let templateParams: ast.VarDecNode[] = [];
 
         if(ctx.tmplDefParamList()) {
-            let defParams = ctx.tmplDefParamList().tmplDefParam();
+            const defParams = ctx.tmplDefParamList().tmplDefParam();
             templateParams = defParams.map<ast.VarDecNode>(dec => this.visit(dec));
         }
 
@@ -278,6 +289,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     visitClassScopeInherit(ctx: ClassScopeInheritContext): ast.InheritNode {
         return create(ast.InheritNode, {
             className: create(ast.IdentifierNode, {name: ctx.ID().text}),
+            templateParams: [] // TODO: enable inheritance
         })
     }
 

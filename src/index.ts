@@ -23,7 +23,7 @@ try {
     let typeChecker = new TypeChecker(node);
     let types = typeChecker.check();
 
-    let transpiler = new Transpiler(types);
+    let transpiler = new Transpiler(types, typeChecker.usedClasses);
     let v = transpiler.transpile(node);
 
     let code = generate(v);

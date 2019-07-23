@@ -3,16 +3,18 @@
   "version": "1.0.0",
   "license": "MIT",
   "scripts": {
-    "lexer": "antlr4ts -no-listener -o parser-ts grammar/LuxLexer.g4",
-    "parser": "antlr4ts -visitor -no-listener -o parser-ts grammar/LuxParser.g4",
+    "lexer": "antlr4ts -no-listener -o parser-ts parser-ts/LuxLexer.g4",
+    "parser": "antlr4ts -visitor -no-listener -o parser-ts parser-ts/LuxParser.g4",
     "grammar": "yarn lexer && yarn parser",
     "nodemon": "nodemon"
   },
   "dependencies": {
     "@types/estree": "^0.0.39",
+    "@types/lodash.clonedeep": "^4.5.6",
     "antlr4": "^4.7.2",
     "antlr4ts": "^0.5.0-alpha.3",
     "astring": "^1.4.0",
+    "lodash.clonedeep": "^4.5.0",
     "nodemon": "^1.19.1",
     "ts-node": "^8.2.0",
     "typescript": "^3.5.1"

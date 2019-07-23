@@ -1,4 +1,4 @@
-// Generated from grammar/LuxParser.g4 by ANTLR 4.7.3-SNAPSHOT
+// Generated from parser-ts/LuxParser.g4 by ANTLR 4.7.3-SNAPSHOT
 
 
 import { ParseTreeVisitor } from "antlr4ts/tree/ParseTreeVisitor";
@@ -61,6 +61,7 @@ import { TmplDefParamListContext } from "./LuxParser";
 import { TmplDefParamContext } from "./LuxParser";
 import { VtypeContext } from "./LuxParser";
 import { PlainTypeContext } from "./LuxParser";
+import { TmplParamContext } from "./LuxParser";
 import { VarDefContext } from "./LuxParser";
 import { ExprContext } from "./LuxParser";
 import { EnumScopeContext } from "./LuxParser";
@@ -518,6 +519,13 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitPlainType?: (ctx: PlainTypeContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `LuxParser.tmplParam`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTmplParam?: (ctx: TmplParamContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `LuxParser.varDef`.

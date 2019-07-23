@@ -96,6 +96,7 @@ export class EnumEntryNode extends Node {
 
 export class TypeNode extends Node {
     name?: string;
+    templateParams: (TypeNode | ExprNode)[];
 }
 
 export class ProgramNode extends Node {
@@ -104,4 +105,5 @@ export class ProgramNode extends Node {
 
 export class InheritNode extends DeclarationNode {
     className: IdentifierNode;
+    templateParams: (TypeNode | ExprNode)[];
 }

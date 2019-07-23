@@ -1,5 +1,6 @@
 import * as ast from "./ast";
 import {create} from "./util";
+import {ClassFactory} from "./typechecker";
 
 export interface TypeNode {
 
@@ -29,6 +30,7 @@ export class Class implements TypeNode {
     abstract: boolean;
 }
 
+// For using a Type like a variable, like when using Static Functions
 export class MetaType implements TypeNode {
     constructor(public type: TypeNode) {
     }
@@ -68,23 +70,45 @@ export class Context {
     }
 
     addType(name: string, type: TypeNode) {
-        let map = this.types;
-        map.set(name, type);
+        this.types.set(name, type);
     }
 
-    getType(name: string): TypeNode {
-        let map = this.types;
-        if (this.parent && !map) {
-            return this.parent.getType(name);
+    *getAllContexts(): IterableIterator<Context> {
+        yield this;
+        if(this.parent) {
+            yield *this.parent.getAllContexts();
         }
-        let t = map.get(name);
-        if (!t && this.parent) {
-            return this.parent.getType(name);
+    }
+
+    getType(name: string, params: (ast.TypeNode | ast.ExprNode)[] = []): TypeNode {
+
+        let typeNode: TypeNode;
+        for(const ctx of this.getAllContexts()) {
+            typeNode = ctx.types.get(name);
+            if(typeNode) {
+                break
+            }
         }
-        if (!t) {
+
+        if (!typeNode) {
             throw new Error(`Type "${name}" not found`);
         }
-        return t;
+
+        if(typeNode instanceof ClassFactory) {
+            const templateParams = params.map(param => {
+                if(param instanceof ast.ExprNode) {
+                    throw new Error("Expression Templates not yet supported!");
+                } else {
+                    return this.getType(param.name, param.templateParams);
+                }
+            });
+
+            return typeNode.resolve(templateParams);
+        } else if(params && params.length > 0) {
+            throw new Error("Can't have Template Parameters on non-class type");
+        }
+
+        return typeNode;
     }
 
     addVariable(name: string, type: TypeNode) {
@@ -94,6 +118,7 @@ export class Context {
         this.variables.set(name, type);
     }
 
+    // TODO: Allow access to inherited stuff
     getVariable(name: string): TypeNode {
         let t = this.variables.get(name);
         if (!t) {
@@ -105,7 +130,11 @@ export class Context {
                     throw new Error(`Variable ${name} not found`);
                 }
             } else {
-                t = new MetaType(t);
+                if(t instanceof ClassFactory) {
+                    return new MetaType(t.resolve([])); // Todo: Implement this for static generic types
+                }
+
+                return new MetaType(t);
             }
         }
         return t;

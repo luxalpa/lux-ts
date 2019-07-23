@@ -1,10 +1,14 @@
 import * as ast from "./ast";
 import * as types from "./typenodes";
 import {create} from "./util";
+import cloneDeep from "lodash.clonedeep"
 
 type TypeMap = Map<ast.Node, types.TypeNode>;
 
 export class TypeChecker {
+    // Contains all the resolved classes for the Transpiler to generate.
+    usedClasses: ast.ClassDecNode[];
+
     constructor(private tree: ast.ProgramNode) {
 
     }
@@ -15,18 +19,20 @@ export class TypeChecker {
         let mainCtx = typeResolver.check();
 
         this.addExternals(mainCtx);
-        for(let fn of typeResolver.functions) {
-            if(!fn.body) {
+        for (let fn of typeResolver.functions) {
+            if (!fn.body) {
                 let cl = fn.context.parent.owner;
-                if(cl instanceof types.Class) {
+                if (cl instanceof types.Class) {
                     cl.abstract = true;
                 }
             } else {
-                for(let stmt of fn.body.statements) {
+                for (let stmt of fn.body.statements) {
                     this.visit(stmt, fn.context, typeMap);
                 }
             }
         }
+
+        this.usedClasses = typeResolver.usedClasses;
 
         return typeMap
     }
@@ -68,17 +74,18 @@ export class TypeChecker {
             this.visit(n.init, context, typemap);
         }
 
+
         if (n.type) {
-            type = context.getType(n.type.name);
+            type = context.getType(n.type.name, n.type.templateParams);
             if (n.init) {
                 let t = typemap.get(n.init);
 
-                if(t instanceof types.ObjectLiteral) {
+                if (t instanceof types.ObjectLiteral) {
                     this.resolve(t, type);
                     t = t.resolved;
                 }
 
-                if(t !== type) {
+                if (t !== type) {
                     throw new Error("type mismatch!")
                 }
             }
@@ -101,7 +108,7 @@ export class TypeChecker {
         n.params.forEach(value => {
             this.visit(value, context, typeMap);
         });
-        if(fnType.parameters.length !== n.params.length) {
+        if (fnType.parameters.length !== n.params.length) {
             throw `Function ${fnType.name} requires ${fnType.parameters.length} parameters, got ${n.params.length}`
         }
 
@@ -116,13 +123,13 @@ export class TypeChecker {
     visitMemberExprNode(n: ast.MemberExprNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.object, context, typeMap);
         let t: types.TypeNode = typeMap.get(n.object) as types.Class;
-        if(t.constructor !== types.Class) {
-            if(t.constructor === types.MetaType) {
+        if (t.constructor !== types.Class) {
+            if (t.constructor === types.MetaType) {
                 let v = (t as types.MetaType).type;
-                switch(v.constructor) {
+                switch (v.constructor) {
                     case types.Enum: {
                         let e = (v as types.Enum);
-                        if(!e.members.includes(n.property)) {
+                        if (!e.members.includes(n.property)) {
                             throw `Property ${n.property} not found on Enum ${e.name}`;
                         }
                         typeMap.set(n, e);
@@ -131,10 +138,10 @@ export class TypeChecker {
                     case types.Class: {
                         let c = (v as types.Class);
                         let fn = c.members.getVariable(n.property);
-                        if(!(fn instanceof types.Function)) {
+                        if (!(fn instanceof types.Function)) {
                             throw new Error("Need a function, but got " + fn.constructor.name)
                         }
-                        if(!fn.isStatic) {
+                        if (!fn.isStatic) {
                             throw new Error("Need a static function!")
                         }
                         typeMap.set(n, fn);
@@ -164,7 +171,7 @@ export class TypeChecker {
 
     visitAssignmentStatementNode(n: ast.AssignmentStatementNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.right, context, typeMap);
-        if(context.getVariable(n.left.name) !== typeMap.get(n.right)) {
+        if (context.getVariable(n.left.name) !== typeMap.get(n.right)) {
             throw "Can't assign these values";
         }
     }
@@ -172,7 +179,7 @@ export class TypeChecker {
     visitAdditionNode(n: ast.AdditionNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.left, context, typeMap);
         this.visit(n.right, context, typeMap);
-        if(typeMap.get(n.left) !== typeMap.get(n.right)) {
+        if (typeMap.get(n.left) !== typeMap.get(n.right)) {
             throw "Left and right value have different type"
         }
         typeMap.set(n, typeMap.get(n.left));
@@ -180,7 +187,7 @@ export class TypeChecker {
 
     visitReturnStatementNode(n: ast.ReturnStatementNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.expr, context, typeMap);
-        if(!this.isTypeEqual((<types.Function>context.owner).returns, typeMap.get(n.expr))) {
+        if (!this.isTypeEqual((<types.Function>context.owner).returns, typeMap.get(n.expr))) {
             throw "Return value doesn't match to function"
         }
     }
@@ -202,8 +209,8 @@ export class TypeChecker {
     }
 
     isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
-        if(weak instanceof types.ObjectLiteral) {
-            if(weak.resolved) {
+        if (weak instanceof types.ObjectLiteral) {
+            if (weak.resolved) {
                 weak = weak.resolved;
             } else {
                 this.resolve(weak, strong);
@@ -224,7 +231,7 @@ export class TypeChecker {
             object.resolved = type;
             return;
         } else {
-            throw new Error("Object literal can only be cast to classes!")
+            throw new Error("Object literal can only be cast to classes! Was: " + type.constructor.name)
         }
     }
 
@@ -246,6 +253,7 @@ class TypeResolver {
     toBeChecked: types.SemiInferred[];
     functions: FunctionCheck[];
     typemap: TypeMap;
+    usedClasses: ast.ClassDecNode[] = [];
 
 
     constructor(private tree: ast.ProgramNode, typemap: TypeMap) {
@@ -257,25 +265,13 @@ class TypeResolver {
     check(): types.Context {
         let context = new types.Context();
         this.addCompilerTypes(context);
-        let classChecks: ClassCheck[] = [];
+        // let classChecks: ClassCheck[] = [];
 
         let globalCheck: ClassCheck = {context, declarations: []};
         this.tree.declarations.forEach(n => {
-            if(n instanceof ast.ClassDecNode) {
-                let cl: types.Class = create(types.Class, {
-                    name: n.name.name,
-                    members: context.addSubContext(n.name.name),
-                    inherits: [],
-                    abstract: false,
-                });
-                cl.members.owner = cl;
-                this.typemap.set(n, cl);
-                context.addType(n.name.name, cl);
-                classChecks.push({
-                    context: cl.members,
-                    declarations: n.declarations
-                })
-            } else if(n instanceof ast.EnumDecNode) {
+            if (n instanceof ast.ClassDecNode) {
+                context.addType(n.name.name, new ClassFactory(this, n, context, this.usedClasses, this.typemap));
+            } else if (n instanceof ast.EnumDecNode) {
                 context.addType(n.name.name, create(types.Enum, {
                     name: n.name.name,
                     internalType: context.getType("Integer"),
@@ -286,13 +282,13 @@ class TypeResolver {
             }
         });
 
-        classChecks.push(globalCheck);
+        // classChecks.push(globalCheck);
 
-        for (let classCheck of classChecks) {
-            for (let declaration of classCheck.declarations) {
-                this.visit(declaration, classCheck.context);
+        // for (let classCheck of classChecks) {
+            for (let declaration of globalCheck.declarations) {
+                this.visit(declaration, globalCheck.context);
             }
-        }
+        // }
 
         return context
     }
@@ -306,7 +302,7 @@ class TypeResolver {
         n.params.forEach(value => this.visit(value, ctx));
         let isStatic = false;
         for (let tag of n.tags) {
-            if(tag.name == "static") {
+            if (tag.name == "static") {
                 isStatic = true;
             }
         }
@@ -314,9 +310,9 @@ class TypeResolver {
         let fnType = create(types.Function, {
             name: n.name.name,
             parameters: n.params.map(value => {
-                return context.getType(value.type.name)
+                return context.getType(value.type.name, value.type.templateParams)
             }),
-            returns: n.returns ? context.getType(n.returns.name) : null,
+            returns: n.returns ? context.getType(n.returns.name, n.returns.templateParams) : null,
             isStatic,
         });
 
@@ -335,7 +331,7 @@ class TypeResolver {
         let type: types.TypeNode;
 
         if (n.type) {
-            type = context.getType(n.type.name);
+            type = context.getType(n.type.name, n.type.templateParams);
             if (n.init) {
                 this.addTypeChecked(n.init, context, type);
             }
@@ -346,8 +342,8 @@ class TypeResolver {
     }
 
     visitInheritNode(n: ast.InheritNode, context: types.Context) {
-        let type = context.getType(n.className.name);
-        if(!(type instanceof types.Class)) {
+        let type = context.getType(n.className.name, n.templateParams);
+        if (!(type instanceof types.Class)) {
             throw new Error(`${type.constructor.name} is not a Class`);
         }
         (<types.Class>context.owner).inherits.push(type);
@@ -377,4 +373,86 @@ class TypeResolver {
         }
         return fn.call(this, n, context);
     }
+}
+
+type TemplateParams = types.TypeNode[];
+
+interface ResolvedType {
+    params: TemplateParams;
+    class: types.Class
+}
+
+export class ClassFactory {
+    // TODO: More sophisticated identification method than String serialization
+    private resolvedClasses: ResolvedType[] = [];
+
+    constructor(private resolver: TypeResolver, private classDecNode: ast.ClassDecNode, private context: types.Context, private usedClasses: ast.ClassDecNode[], private typemap: TypeMap) {
+    }
+
+    private findCached(templateParams: TemplateParams): types.Class | undefined {
+        const resolvedType = this.resolvedClasses.find(({params}) => {
+            if(params.length !== templateParams.length) {
+                return false;
+            }
+            for(let i = 0; i < templateParams.length; i++) {
+                if(templateParams[i] !== params[i]) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        if(resolvedType) {
+            return resolvedType.class;
+        }
+    }
+
+    resolve(templateParams: TemplateParams): types.Class {
+        const cached = this.findCached(templateParams);
+        if(cached !== undefined) {
+            return cached;
+        }
+
+        const n = cloneDeep(this.classDecNode);
+
+        this.usedClasses.push(n);
+
+        let cl: types.Class = create(types.Class, {
+            name: n.name.name,
+            members: this.context.addSubContext(n.name.name),
+            inherits: [],
+            abstract: false,
+        });
+        cl.members.owner = cl;
+        this.typemap.set(n, cl);
+
+        this.resolvedClasses.push({
+            class: cl,
+            params: templateParams,
+        });
+
+        if(templateParams.length > this.classDecNode.templateParams.length) {
+            throw new Error("Invocation Template Params are longer than Class Template Params")
+        }
+
+        for(let i = 0; i < this.classDecNode.templateParams.length; i++) {
+            let paramDef = this.classDecNode.templateParams[i];
+            let paramVal = templateParams[i];
+            if(paramDef.type.name === "Type") {
+                cl.members.addType(paramDef.left.name, paramVal)
+            } else {
+                throw new Error("Template Params other than Type are not yet supported");
+            }
+        }
+
+        for(let dec of n.declarations) {
+            this.resolver.visit(dec, cl.members);
+        }
+
+        return cl;
+    }
+}
+
+function deepCopy(obj: any): any {
+
 }

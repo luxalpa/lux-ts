@@ -13,27 +13,21 @@ class ClassInfo {
 export class Transpiler {
     classMap: Map<types.Class, ClassInfo>;
 
-    constructor(private typemap: Map<ast.Node, types.TypeNode>) {
+    constructor(private typemap: Map<ast.Node, types.TypeNode>, private usedClasses: ast.ClassDecNode[]) {
         this.buildClassMap();
     }
 
     buildClassMap() {
         this.classMap = new Map<types.Class, ClassInfo>();
 
-        for (let [k, v] of this.typemap.entries()) {
-            if (k instanceof ast.ClassDecNode) {
-                if (!(v instanceof types.Class)) {
-                    throw new Error("ClassDecNode must be linked to Class")
-                }
-
+        for (let dec of this.usedClasses) {
                 let classInfo = create(ClassInfo, {
-                    astNode: k,
+                    astNode: dec,
                     memberVars: [],
                     methods: [],
                 });
 
-                this.classMap.set(v, classInfo);
-            }
+                this.classMap.set(this.typemap.get(dec) as types.Class, classInfo);
         }
 
         for (let classInfo of this.classMap.values()) {
@@ -75,6 +69,22 @@ export class Transpiler {
 
         let stmts = [];
         for (let declaration of program.declarations) {
+            if(declaration instanceof ast.ClassDecNode) {
+                // These are being done separately
+                continue
+            }
+
+            let s = this.visit(declaration);
+            if (Array.isArray(s)) {
+                for (let x of s) {
+                    stmts.push(x)
+                }
+            } else {
+                stmts.push(s)
+            }
+        }
+
+        for (let declaration of this.usedClasses) {
             let s = this.visit(declaration);
             if (Array.isArray(s)) {
                 for (let x of s) {

@@ -104,7 +104,12 @@ vtype
     ;
 
 plainType
-    : ID
+    : ID ('<' ENDL* tmplParam (delim tmplParam)* ENDL* '>')?
+    ;
+
+tmplParam
+    : vtype
+    | expr
     ;
 
 varDef

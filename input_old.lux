@@ -1,0 +1,57 @@
+MyEnum: enum {
+    Value1
+    Value2
+}
+
+Dragon: class {
+    inherit Creature
+
+    age: Integer
+    name: Integer
+
+    roar: () => Integer {
+        console.log(1)
+        return 0
+    }
+
+    @static create: () => Dragon {
+        console.log(2)
+        return [name: 100]
+    }
+
+    attack: () => {
+        console.log(12)
+    }
+}
+
+Iterator: class<T: Type> {
+    currentValue: T
+    next: () => Integer {}
+}
+
+Creature: class {
+    value: Integer
+    attack: () => {
+        console.log(10)
+    }
+}
+
+main: (input: Integer) => Integer {
+    t := otherFunction(MyEnum.Value2)
+    x := MyEnum.Value1
+    m: Dragon = [
+        age: 100
+        name: 25
+    ]
+
+    iterator: Iterator<Integer> = []
+
+    dragon := Dragon.create()
+    dragon.roar()
+}
+
+otherFunction: (val: MyEnum) => Integer {
+    a := 20
+    a = a + 3
+    return a
+}
