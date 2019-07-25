@@ -16,6 +16,10 @@ export class Integer implements TypeNode {
 
 }
 
+export class Boolean implements TypeNode {
+
+}
+
 export class Function implements TypeNode {
     name: string;
     parameters: TypeNode[];
@@ -24,25 +28,30 @@ export class Function implements TypeNode {
 }
 
 export class Class implements TypeNode {
-    constructor(
-        public name: string,
-        public members: Context,
-        public inherits: Class[],
-        public abstract: boolean
-    ) {
-    }
+    name: string;
+    members: Context;
+    inherits: Class[];
+    abstract: boolean;
 
     getMember(name: string): TypeNode {
+        let fns: Function[] = [];
         for(const c of this.allParentClasses()) {
-            const member = c.members.variables.get(name);
-            if(member) {
+            const member = c.members.getMember(name);
+            if(member instanceof OverloadedFunction) {
+                fns.push(...member.functions);
+            } else if(member) {
                 return member;
             }
+        }
+        if(fns.length > 0) {
+            return create(OverloadedFunction, {
+                functions: fns
+            })
         }
         throw new Error(`Member ${name} not found on class ${this.name}`);
     }
 
-    *allParentClasses() {
+    *allParentClasses(): IterableIterator<Class> {
         yield this;
         for (let parent of this.inherits) {
             yield * parent.allParentClasses();
@@ -73,15 +82,24 @@ export class ObjectLiteralEntry {
     value: TypeNode;
 }
 
+export class OverloadedFunction implements TypeNode {
+    functions: Function[]
+}
+
+interface ContextSymbol {
+    name: string;
+    type: TypeNode;
+}
+
 export class Context {
     parent?: Context;
     types: Map<string, TypeNode>;
-    variables: Map<string, TypeNode>;
+    variables: ContextSymbol[];
     owner: Function | Class;
 
     constructor(parent?: Context) {
         this.types = new Map<string, TypeNode>();
-        this.variables = new Map<string, TypeNode>();
+        this.variables = [];
         this.parent = parent;
     }
 
@@ -101,7 +119,6 @@ export class Context {
     }
 
     getType(name: string, params: (ast.TypeNode | ast.ExprNode)[] = []): TypeNode {
-
         let typeNode: TypeNode;
         for (const ctx of this.getAllContexts()) {
             typeNode = ctx.types.get(name);
@@ -132,23 +149,58 @@ export class Context {
     }
 
     addVariable(name: string, type: TypeNode) {
-        if (this.variables.get(name)) {
-            throw new Error(`Type ${name} is already defined`)
+        for(const [i, v] of this.variables.entries()) {
+            if(v.name === name) {
+                if(!(v.type instanceof Function)) {
+                    throw new Error(`Variable ${name} is already defined`)
+                } else {
+                    // TODO: Make sure we don't define the same type twice!
+                }
+            }
         }
-        this.variables.set(name, type);
+        this.variables.push({
+            type,
+            name,
+        });
     }
 
-    // TODO: Allow access to inherited stuff
+    getMember(name: string): TypeNode | null {
+        let fns: Function[] = [];
+        for(const v of this.variables) {
+            if(name === v.name) {
+                // Only Functions can be overloaded.
+                if(!(v.type instanceof Function)) {
+                    return v.type;
+                }
+                fns.push(v.type as Function);
+            }
+        }
+
+        if(fns.length == 0) {
+            return null;
+        }
+
+        return create(OverloadedFunction, {
+            functions: fns
+        });
+    }
+
     getVariable(name: string): TypeNode {
+        let fns: Function[] = [];
         for(const ctx of this.getAllContexts()) {
             if(ctx.owner instanceof Class) {
                 // Skip class members. They can only be used explicitly using getMember
                 continue
             }
-            const value = ctx.variables.get(name);
-            if(value) {
-                return value;
+            for(const v of ctx.variables) {
+                if(name === v.name) {
+                    if(!(v.type instanceof Function)) {
+                        return v.type;
+                    }
+                    fns.push(v.type as Function);
+                }
             }
+
             const type = ctx.types.get(name);
             if(type) {
                 if (type instanceof ClassFactory) {
@@ -157,6 +209,13 @@ export class Context {
                 return new MetaType(type);
             }
         }
+
+        if(fns.length > 0) {
+            return create(OverloadedFunction, {
+                functions: fns,
+            });
+        }
+
         throw new Error(`Variable ${name} not found`);
     }
 }

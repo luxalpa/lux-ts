@@ -45,12 +45,22 @@ export class TypeChecker {
                 context.getType("Integer")
             ],
         }));
+        cc.addVariable("log", create(types.Function, {
+            name: "log",
+            parameters: [
+                context.getType("Boolean")
+            ],
+        }));
 
         context.addVariable("console", create(types.Class, {
             name: "console",
             members: cc,
             inherits: [],
+            abstract: false
         }));
+
+        context.addVariable("false", context.getType("Boolean"));
+        context.addVariable("true", context.getType("Boolean"));
     }
 
     visit(n: ast.Node, context: types.Context, typeMap: TypeMap) {
@@ -101,23 +111,28 @@ export class TypeChecker {
 
     visitFunctionCallExprNode(n: ast.FunctionCallExprNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.fn, context, typeMap);
-        let fnType = typeMap.get(n.fn) as types.Function;
-        if (!(fnType instanceof types.Function)) {
-            throw new Error("Function Call on non-function: " + JSON.stringify(fnType))
+        const overloadedFns = typeMap.get(n.fn);
+        if (!(overloadedFns instanceof types.OverloadedFunction)) {
+            throw new Error("Function Call on non-function: " + JSON.stringify(overloadedFns))
         }
         n.params.forEach(value => {
             this.visit(value, context, typeMap);
         });
-        if (fnType.parameters.length !== n.params.length) {
-            throw `Function ${fnType.name} requires ${fnType.parameters.length} parameters, got ${n.params.length}`
+        outerLoop: for(const fn of overloadedFns.functions) {
+            if(fn.parameters.length !== n.params.length) {
+                continue;
+            }
+            for(const [i, param] of fn.parameters.entries()) {
+                if(param !== typeMap.get(n.params[i])) {
+                    continue outerLoop;
+                }
+            }
+            typeMap.set(n.fn, fn); // Resolve the OverloadedFunction in the typemap
+            typeMap.set(n, fn.returns);
+            return
         }
 
-        for (let i = 0; i < fnType.parameters.length; i++) {
-            if (typeMap.get(n.params[i]) !== fnType.parameters[i]) {
-                throw "Function parameter types mismatch"
-            }
-        }
-        typeMap.set(n, fnType.returns);
+        throw new Error(`No function overload found.`)
     }
 
     visitMemberExprNode(n: ast.MemberExprNode, context: types.Context, typeMap: TypeMap) {
@@ -137,14 +152,20 @@ export class TypeChecker {
                     }
                     case types.Class: {
                         let c = (v as types.Class);
-                        let fn = c.getMember(n.property);
-                        if (!(fn instanceof types.Function)) {
-                            throw new Error("Need a function, but got " + fn.constructor.name)
+                        let overloadedFns = c.getMember(n.property);
+
+                        if(!(overloadedFns instanceof types.OverloadedFunction)) {
+                            throw new Error("Need a function, but got " + overloadedFns.constructor.name)
                         }
-                        if (!fn.isStatic) {
+
+                        const staticFns = overloadedFns.functions.filter(fn => fn.isStatic);
+                        if(staticFns.length === 0) {
                             throw new Error("Need a static function!")
                         }
-                        typeMap.set(n, fn);
+
+                        typeMap.set(n, create(types.OverloadedFunction, {
+                            functions: staticFns
+                        }));
                         return
                     }
                     default: {
@@ -152,7 +173,7 @@ export class TypeChecker {
                     }
                 }
             } else {
-                throw new Error("Member expression on non-class type");
+                throw new Error(`Member expression on non-class type ${t.constructor.name}`);
             }
         } else {
             let v = (t as types.Class).getMember(n.property);
@@ -306,7 +327,8 @@ class TypeResolver {
     }
 
     addCompilerTypes(context: types.Context) {
-        context.addType("Integer", new types.Integer);
+        context.addType("Integer", new types.Integer());
+        context.addType("Boolean", new types.Boolean())
     }
 
     visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
@@ -433,7 +455,12 @@ export class ClassFactory {
 
         this.usedClasses.push(n);
 
-        let cl: types.Class = new types.Class(n.name.name, this.context.addSubContext(n.name.name), [], false);
+        let cl: types.Class = <types.Class><types.TypeNode>create(types.Class, {
+            name: n.name.name,
+            members: this.context.addSubContext(n.name.name),
+            inherits: [],
+            abstract: false,
+        });
         cl.members.owner = cl;
         this.typemap.set(n, cl);
 
