@@ -19,6 +19,7 @@ fnCallStatement
 
 lvalue
     : ID                                  # lvalueID
+    | left=lvalue '.' right=ID            # lvalueMember
     ;
 
 taggedDeclaration
@@ -58,7 +59,7 @@ classScope
 
 classScopeDec
     : taggedDeclaration                   # classScopeDecNormal
-    | 'inherit' ID                        # classScopeInherit
+    | 'inherit' plainType                 # classScopeInherit
     ;
 
 fnType
@@ -97,14 +98,14 @@ tmplDefParam
     ;
 
 vtype
-    : vtype '.' plainType                 # typeInType
-    | '&' fnType fnReturnType             # typeFunctionPtr
+    : '&' fnType fnReturnType             # typeFunctionPtr
     | '&' plainType                       # typeRef
     | plainType                           # typePlain
     ;
 
 plainType
-    : ID ('<' ENDL* tmplParam (delim tmplParam)* ENDL* '>')?
+    : ID ('<' ENDL* tmplParam (delim tmplParam)* ENDL* '>')?   # normalType
+    | plainType '.' plainType                                  # typeInType
     ;
 
 tmplParam

@@ -40,7 +40,7 @@ export class IdentifierNode extends Node {
 export class StatementNode extends Node {}
 
 export class AssignmentStatementNode extends StatementNode {
-    left: IdentifierNode;
+    left: ExprNode;
     right: ExprNode;
 }
 
@@ -104,6 +104,5 @@ export class ProgramNode extends Node {
 }
 
 export class InheritNode extends DeclarationNode {
-    className: IdentifierNode;
-    templateParams: (TypeNode | ExprNode)[];
+    class: TypeNode;
 }

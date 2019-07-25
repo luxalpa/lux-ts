@@ -25,7 +25,7 @@ import {
     TypePlainContext,
     VarDecContext, VarDefAssignExplicitContext,
     VarDefAssignImplicitContext,
-    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext
+    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext, NormalTypeContext, LvalueMemberContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -150,11 +150,11 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         return this.visit(ctx.plainType());
     }
 
-    visitPlainType(ctx: PlainTypeContext) {
+    visitNormalType(ctx: NormalTypeContext): ast.TypeNode {
         return create(ast.TypeNode, {
             name: ctx.ID().text,
             templateParams: ctx.tmplParam().map(p => this.visit(p))
-        })
+        });
     }
 
     visitTmplParam(ctx: TmplParamContext): ast.TypeNode | ast.ExprNode {
@@ -177,15 +177,24 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
     visitAssignStmt(ctx: AssignStmtContext): ast.AssignmentStatementNode {
         return create(ast.AssignmentStatementNode, {
-            left: this.visit(ctx.lvalue()) as ast.IdentifierNode,
+            left: this.visit(ctx.lvalue()),
             right: this.visit(ctx.expr())
         })
     }
 
-    visitLvalueID(ctx: LvalueIDContext): ast.IdentifierNode {
-        return create(ast.IdentifierNode, {
-            name: ctx.ID().text
+    visitLvalueID(ctx: LvalueIDContext): ast.IdentifierExprNode {
+        return create(ast.IdentifierExprNode, {
+            id: create(ast.IdentifierNode, {
+                name: ctx.ID().text
+            })
         })
+    }
+
+    visitLvalueMember(ctx: LvalueMemberContext): ast.MemberExprNode {
+        return create(ast.MemberExprNode, {
+            object: this.visit(ctx._left),
+            property: ctx._right.text
+        });
     }
 
     visitTypeDec(ctx: TypeDecContext): ast.DeclarationNode {
@@ -287,9 +296,10 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     visitClassScopeInherit(ctx: ClassScopeInheritContext): ast.InheritNode {
+        const typeNode = this.visit(ctx.plainType()) as ast.TypeNode;
+
         return create(ast.InheritNode, {
-            className: create(ast.IdentifierNode, {name: ctx.ID().text}),
-            templateParams: [] // TODO: enable inheritance
+            class: typeNode,
         })
     }
 

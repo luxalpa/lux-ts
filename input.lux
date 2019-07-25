@@ -1,17 +1,48 @@
-Iterator: class<T: Type> {
-    value: Integer
 
-    hello: () => {
-        x: T = []
+
+main: () => {
+    c := Counter.create()
+    it := c.begin()
+    console.log(it.next())
+    console.log(it.next())
+    console.log(it.next())
+    console.log(it.next())
+    console.log(it.next())
+    console.log(it.next())
+}
+
+Iterator: class<T: Type> {
+    next: () => T
+}
+
+IEnumerable: class<T: Type> {
+    begin: () => Iterator<T>
+}
+
+CounterIterator: class {
+    inherit Iterator<Integer>
+
+    currentValue: Integer
+
+    next: () => Integer {
+        ret := this.currentValue
+        this.currentValue = this.currentValue + 1
+        return ret
+    }
+
+    @static create: () => CounterIterator {
+        return [currentValue: 0]
     }
 }
 
-Dragon: class {
-    name: Integer
-}
+Counter: class {
+    inherit IEnumerable<Integer>
 
-main: () => {
-    n: Iterator<Dragon> = [value: 100]
+    @static create: () => Counter {
+        return []
+    }
 
-    console.log(12)
+    begin: () => Iterator<Integer> {
+        return CounterIterator.create()
+    }
 }

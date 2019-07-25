@@ -24,10 +24,30 @@ export class Function implements TypeNode {
 }
 
 export class Class implements TypeNode {
-    name: string;
-    members: Context;
-    inherits: Class[];
-    abstract: boolean;
+    constructor(
+        public name: string,
+        public members: Context,
+        public inherits: Class[],
+        public abstract: boolean
+    ) {
+    }
+
+    getMember(name: string): TypeNode {
+        for(const c of this.allParentClasses()) {
+            const member = c.members.variables.get(name);
+            if(member) {
+                return member;
+            }
+        }
+        throw new Error(`Member ${name} not found on class ${this.name}`);
+    }
+
+    *allParentClasses() {
+        yield this;
+        for (let parent of this.inherits) {
+            yield * parent.allParentClasses();
+        }
+    }
 }
 
 // For using a Type like a variable, like when using Static Functions
@@ -73,19 +93,19 @@ export class Context {
         this.types.set(name, type);
     }
 
-    *getAllContexts(): IterableIterator<Context> {
+    * getAllContexts(): IterableIterator<Context> {
         yield this;
-        if(this.parent) {
-            yield *this.parent.getAllContexts();
+        if (this.parent) {
+            yield* this.parent.getAllContexts();
         }
     }
 
     getType(name: string, params: (ast.TypeNode | ast.ExprNode)[] = []): TypeNode {
 
         let typeNode: TypeNode;
-        for(const ctx of this.getAllContexts()) {
+        for (const ctx of this.getAllContexts()) {
             typeNode = ctx.types.get(name);
-            if(typeNode) {
+            if (typeNode) {
                 break
             }
         }
@@ -94,9 +114,9 @@ export class Context {
             throw new Error(`Type "${name}" not found`);
         }
 
-        if(typeNode instanceof ClassFactory) {
+        if (typeNode instanceof ClassFactory) {
             const templateParams = params.map(param => {
-                if(param instanceof ast.ExprNode) {
+                if (param instanceof ast.ExprNode) {
                     throw new Error("Expression Templates not yet supported!");
                 } else {
                     return this.getType(param.name, param.templateParams);
@@ -104,7 +124,7 @@ export class Context {
             });
 
             return typeNode.resolve(templateParams);
-        } else if(params && params.length > 0) {
+        } else if (params && params.length > 0) {
             throw new Error("Can't have Template Parameters on non-class type");
         }
 
@@ -120,23 +140,23 @@ export class Context {
 
     // TODO: Allow access to inherited stuff
     getVariable(name: string): TypeNode {
-        let t = this.variables.get(name);
-        if (!t) {
-            t = this.types.get(name);
-            if (!t) {
-                if (this.parent) {
-                    return this.parent.getVariable(name);
-                } else {
-                    throw new Error(`Variable ${name} not found`);
+        for(const ctx of this.getAllContexts()) {
+            if(ctx.owner instanceof Class) {
+                // Skip class members. They can only be used explicitly using getMember
+                continue
+            }
+            const value = ctx.variables.get(name);
+            if(value) {
+                return value;
+            }
+            const type = ctx.types.get(name);
+            if(type) {
+                if (type instanceof ClassFactory) {
+                    return new MetaType(type.resolve([])); // Todo: Implement this for static generic types
                 }
-            } else {
-                if(t instanceof ClassFactory) {
-                    return new MetaType(t.resolve([])); // Todo: Implement this for static generic types
-                }
-
-                return new MetaType(t);
+                return new MetaType(type);
             }
         }
-        return t;
+        throw new Error(`Variable ${name} not found`);
     }
 }

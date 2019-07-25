@@ -6,7 +6,6 @@ import { ParseTreeVisitor } from "antlr4ts/tree/ParseTreeVisitor";
 import { FnDefParamFullContext } from "./LuxParser";
 import { FnDefParamOnlyTypeContext } from "./LuxParser";
 import { FnDefParamSkipContext } from "./LuxParser";
-import { TypeInTypeContext } from "./LuxParser";
 import { TypeFunctionPtrContext } from "./LuxParser";
 import { TypeRefContext } from "./LuxParser";
 import { TypePlainContext } from "./LuxParser";
@@ -29,9 +28,12 @@ import { ObjectLiteralExprContext } from "./LuxParser";
 import { FnReturnTypeSingleContext } from "./LuxParser";
 import { ClassScopeDecNormalContext } from "./LuxParser";
 import { ClassScopeInheritContext } from "./LuxParser";
+import { NormalTypeContext } from "./LuxParser";
+import { TypeInTypeContext } from "./LuxParser";
 import { VarDecContext } from "./LuxParser";
 import { TypeDecContext } from "./LuxParser";
 import { LvalueIDContext } from "./LuxParser";
+import { LvalueMemberContext } from "./LuxParser";
 import { TmplDefParamFullContext } from "./LuxParser";
 import { TmplDefParamOnlyTypeContext } from "./LuxParser";
 import { TmplDefParamSkipContext } from "./LuxParser";
@@ -101,14 +103,6 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitFnDefParamSkip?: (ctx: FnDefParamSkipContext) => Result;
-
-	/**
-	 * Visit a parse tree produced by the `typeInType`
-	 * labeled alternative in `LuxParser.vtype`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitTypeInType?: (ctx: TypeInTypeContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `typeFunctionPtr`
@@ -287,6 +281,22 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitClassScopeInherit?: (ctx: ClassScopeInheritContext) => Result;
 
 	/**
+	 * Visit a parse tree produced by the `normalType`
+	 * labeled alternative in `LuxParser.plainType`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitNormalType?: (ctx: NormalTypeContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `typeInType`
+	 * labeled alternative in `LuxParser.plainType`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitTypeInType?: (ctx: TypeInTypeContext) => Result;
+
+	/**
 	 * Visit a parse tree produced by the `varDec`
 	 * labeled alternative in `LuxParser.declaration`.
 	 * @param ctx the parse tree
@@ -309,6 +319,14 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitLvalueID?: (ctx: LvalueIDContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `lvalueMember`
+	 * labeled alternative in `LuxParser.lvalue`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitLvalueMember?: (ctx: LvalueMemberContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `tmplDefParamFull`

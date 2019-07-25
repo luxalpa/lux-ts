@@ -137,7 +137,7 @@ export class TypeChecker {
                     }
                     case types.Class: {
                         let c = (v as types.Class);
-                        let fn = c.members.getVariable(n.property);
+                        let fn = c.getMember(n.property);
                         if (!(fn instanceof types.Function)) {
                             throw new Error("Need a function, but got " + fn.constructor.name)
                         }
@@ -155,7 +155,7 @@ export class TypeChecker {
                 throw new Error("Member expression on non-class type");
             }
         } else {
-            let v = (t as types.Class).members.getVariable(n.property);
+            let v = (t as types.Class).getMember(n.property);
             typeMap.set(n, v);
         }
     }
@@ -171,7 +171,8 @@ export class TypeChecker {
 
     visitAssignmentStatementNode(n: ast.AssignmentStatementNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.right, context, typeMap);
-        if (context.getVariable(n.left.name) !== typeMap.get(n.right)) {
+        this.visit(n.left, context, typeMap);
+        if (typeMap.get(n.left) !== typeMap.get(n.right)) {
             throw "Can't assign these values";
         }
     }
@@ -209,6 +210,7 @@ export class TypeChecker {
     }
 
     isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
+        // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
         if (weak instanceof types.ObjectLiteral) {
             if (weak.resolved) {
                 weak = weak.resolved;
@@ -216,14 +218,24 @@ export class TypeChecker {
                 this.resolve(weak, strong);
                 return true;
             }
+        } else if(weak instanceof types.Class) {
+            // This also checks for the class itself
+            for(let inherited of weak.allParentClasses()) {
+                if(strong === inherited) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return strong === weak;
         }
-        return strong === weak;
+
     }
 
     resolve(object: types.ObjectLiteral, type: types.TypeNode) {
         if (type instanceof types.Class) {
             for (let entry of object.entries) {
-                let target = type.members.getVariable(entry.key);
+                let target = type.getMember(entry.key);
                 if (target !== entry.value) {
                     throw new Error("type mismatch in object literal");
                 }
@@ -323,6 +335,10 @@ class TypeResolver {
             body: n.body,
         });
 
+        if(!isStatic) {
+            ctx.addVariable("this", context.owner); // TODO: This needs to work for functions within functions
+        }
+
         context.addVariable(n.name.name, fnType);
         this.typemap.set(n, fnType);
     }
@@ -342,12 +358,12 @@ class TypeResolver {
     }
 
     visitInheritNode(n: ast.InheritNode, context: types.Context) {
-        let type = context.getType(n.className.name, n.templateParams);
+        let type = context.getType(n.class.name, n.class.templateParams);
         if (!(type instanceof types.Class)) {
             throw new Error(`${type.constructor.name} is not a Class`);
         }
         (<types.Class>context.owner).inherits.push(type);
-        this.typemap.set(n.className, type);
+        this.typemap.set(n.class, type);
     }
 
     addTypeChecked(expr: ast.ExprNode, context: types.Context, forcedType: types.TypeNode): types.TypeNode {
@@ -417,12 +433,7 @@ export class ClassFactory {
 
         this.usedClasses.push(n);
 
-        let cl: types.Class = create(types.Class, {
-            name: n.name.name,
-            members: this.context.addSubContext(n.name.name),
-            inherits: [],
-            abstract: false,
-        });
+        let cl: types.Class = new types.Class(n.name.name, this.context.addSubContext(n.name.name), [], false);
         cl.members.owner = cl;
         this.typemap.set(n, cl);
 
