@@ -1,27 +1,11 @@
-
-Animal: class {
-    getName: () => {
-        console.log(42)
-        console.log(false)
-    }
-}
-
-Dragon: class {
-    inherit Animal
-}
-
-
 main: () => {
-    d: Dragon = []
-    d.getName()
+    v := 5
+    if v = 5 {
+        console.log(100)
+    }
 
     c := Counter.create()
     it := c.begin()
-    console.log(it.next())
-    console.log(it.next())
-    console.log(it.next())
-    console.log(it.next())
-    console.log(it.next())
     console.log(it.next())
 }
 

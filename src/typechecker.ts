@@ -198,7 +198,7 @@ export class TypeChecker {
         }
     }
 
-    visitAdditionNode(n: ast.AdditionNode, context: types.Context, typeMap: TypeMap) {
+    visitInfixExprNode(n: ast.InfixExprNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.left, context, typeMap);
         this.visit(n.right, context, typeMap);
         if (typeMap.get(n.left) !== typeMap.get(n.right)) {
@@ -228,6 +228,14 @@ export class TypeChecker {
         }
 
         typeMap.set(n, literal);
+    }
+
+    visitIfStatementNode(n: ast.IfStatementNode, context: types.Context, typeMap: TypeMap) {
+        this.visit(n.condition, context, typeMap);
+        let ctx = context.addSubContext();
+        for(const stmt of n.scope.statements) {
+            this.visit(stmt, ctx, typeMap);
+        }
     }
 
     isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
@@ -332,7 +340,7 @@ class TypeResolver {
     }
 
     visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
-        let ctx = context.addSubContext(n.name.name);
+        let ctx = context.addSubContext();
         n.params.forEach(value => this.visit(value, ctx));
         let isStatic = false;
         for (let tag of n.tags) {
@@ -457,7 +465,7 @@ export class ClassFactory {
 
         let cl: types.Class = <types.Class><types.TypeNode>create(types.Class, {
             name: n.name.name,
-            members: this.context.addSubContext(n.name.name),
+            members: this.context.addSubContext(),
             inherits: [],
             abstract: false,
         });

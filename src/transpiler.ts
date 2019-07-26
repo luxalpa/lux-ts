@@ -1,8 +1,8 @@
 import * as ast from "./ast"
+import {InfixOperator} from "./ast"
 import * as ESTree from "estree"
 import * as types from "./typenodes";
 import {create} from "./util";
-import instantiate = WebAssembly.instantiate;
 
 class ClassInfo {
     astNode: ast.ClassDecNode;
@@ -165,36 +165,19 @@ export class Transpiler {
         }
     }
 
-    visitAdditionNode(e: ast.AdditionNode): ESTree.BinaryExpression {
-        return {
-            operator: "+",
-            left: this.visit(e.left),
-            right: this.visit(e.right),
-            type: "BinaryExpression",
+    visitInfixExprNode(e: ast.InfixExprNode): ESTree.BinaryExpression {
+        let op: ESTree.BinaryOperator;
+        switch (e.operator) {
+            case InfixOperator.Equals:
+                op = "==";
+                break;
+            default:
+                op = e.operator;
+                break;
         }
-    }
 
-    visitMultiplicationNode(e: ast.MultiplicationNode): ESTree.BinaryExpression {
         return {
-            operator: "*",
-            left: this.visit(e.left),
-            right: this.visit(e.right),
-            type: "BinaryExpression",
-        }
-    }
-
-    visitDivisionNode(e: ast.DivisionNode): ESTree.BinaryExpression {
-        return {
-            operator: "/",
-            left: this.visit(e.left),
-            right: this.visit(e.right),
-            type: "BinaryExpression",
-        }
-    }
-
-    visitSubtractionNode(e: ast.SubtractionNode): ESTree.BinaryExpression {
-        return {
-            operator: "-",
+            operator: op,
             left: this.visit(e.left),
             right: this.visit(e.right),
             type: "BinaryExpression",
@@ -275,6 +258,14 @@ export class Transpiler {
         return {
             type: "ExpressionStatement",
             expression: this.visit(e.fnCall)
+        }
+    }
+
+    visitIfStatementNode(e: ast.IfStatementNode): ESTree.IfStatement {
+        return {
+            type: "IfStatement",
+            test: this.visit(e.condition),
+            consequent: this.visit(e.scope)
         }
     }
 

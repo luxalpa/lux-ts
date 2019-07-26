@@ -103,7 +103,7 @@ export class Context {
         this.parent = parent;
     }
 
-    addSubContext(name: string): Context {
+    addSubContext(): Context {
         return new Context(this);
     }
 

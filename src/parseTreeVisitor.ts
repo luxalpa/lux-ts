@@ -25,29 +25,19 @@ import {
     TypePlainContext,
     VarDecContext, VarDefAssignExplicitContext,
     VarDefAssignImplicitContext,
-    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext, NormalTypeContext, LvalueMemberContext
+    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext, NormalTypeContext, LvalueMemberContext, IfStmtContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
 import {create} from "./util";
-import {VarDecNode} from "./ast";
 
 export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
-    visitInfixExpr(ctx: InfixExprContext): ast.Node {
-        let node: ast.InfixExprNode;
-        switch (ctx._op.type) {
-            case LuxParser.OPPLUS:
-                node = new ast.AdditionNode();
-                break;
-            case LuxParser.OPMULT:
-                node = new ast.MultiplicationNode();
-                break;
-        }
-
-        node.left = this.visit(ctx._left);
-        node.right = this.visit(ctx._right);
-
-        return node;
+    visitInfixExpr(ctx: InfixExprContext): ast.InfixExprNode {
+        return create(ast.InfixExprNode, {
+            operator: <ast.InfixOperator>ctx._op.text,
+            left: this.visit(ctx._left),
+            right: this.visit(ctx._right),
+        });
     };
 
     visitBracketExpr(ctx: BracketExprContext): ast.ExprNode {
@@ -316,6 +306,13 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         return create(ast.MemberExprNode, {
             object: this.visit(ctx._left),
             property: ctx._right.text,
+        })
+    }
+
+    visitIfStmt(ctx: IfStmtContext): ast.IfStatementNode {
+        return create(ast.IfStatementNode, {
+            condition: this.visit(ctx.expr()),
+            scope: this.visit(ctx.scope()),
         })
     }
 

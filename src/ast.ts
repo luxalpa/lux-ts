@@ -2,15 +2,22 @@ export class Node {
 }
 
 export class ExprNode extends Node {}
+
+export enum InfixOperator {
+    Addition = "+",
+    Subtraction = "-",
+    Multiplication = "*",
+    Division = "/",
+    Equals = "=",
+    Unequals = "!="
+}
+
 export class InfixExprNode extends ExprNode {
+    operator: InfixOperator;
     left: ExprNode;
     right: ExprNode;
 }
 
-export class AdditionNode extends InfixExprNode {}
-export class SubtractionNode extends InfixExprNode {}
-export class MultiplicationNode extends InfixExprNode {}
-export class DivisionNode extends InfixExprNode {}
 export class NumberNode extends ExprNode {
     value: number;
 }
@@ -42,6 +49,11 @@ export class StatementNode extends Node {}
 export class AssignmentStatementNode extends StatementNode {
     left: ExprNode;
     right: ExprNode;
+}
+
+export class IfStatementNode extends StatementNode {
+    condition: ExprNode;
+    scope: ScopeNode;
 }
 
 export class ReturnStatementNode extends StatementNode {

@@ -11,6 +11,7 @@ statement
     | lvalue '=' expr                     # assignStmt
     | 'return' expr?                      # returnStmt
     | fnCallStatement                     # fnCallStmt
+    | 'if' expr scope                     # ifStmt
     ;
 
 fnCallStatement
@@ -119,13 +120,14 @@ varDef
     | ID ':' vtype '=' expr               # varDefAssignExplicit
     ;
 
-expr : left=expr '.' right=ID             # memberExpr
-    | value=NUMBER                        # numberE
-    | id=ID                               # identifierExpr
-    | '(' expr ')'                        # bracketExpr
-    | left=expr op=('*' | '/') right=expr # infixExpr
-    | left=expr op=('+' | '-') right=expr # infixExpr
-    | expr '(' fnCallParams? ')'          # implFnCallExpr
+expr : left=expr '.' right=ID              # memberExpr
+    | value=NUMBER                         # numberE
+    | id=ID                                # identifierExpr
+    | '(' expr ')'                         # bracketExpr
+    | left=expr op=('*' | '/') right=expr  # infixExpr
+    | left=expr op=('+' | '-') right=expr  # infixExpr
+    | left=expr op=('=' | '!=') right=expr # infixExpr
+    | expr '(' fnCallParams? ')'           # implFnCallExpr
     | '[' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* ']' # objectLiteralExpr
     ;
 
