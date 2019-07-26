@@ -107,11 +107,11 @@ export class Transpiler {
             throw new Error("visit: Node is undefined");
         }
         if (n.constructor.name == "Object") {
-            throw `Object without type: (${JSON.stringify(n)})`
+            throw new Error(`Object without type: (${JSON.stringify(n)})`)
         }
         let fn = this['visit' + n.constructor.name];
         if (!fn) {
-            throw `Transpiler: ${n.constructor.name} is unimplemented!`
+            throw new Error(`Transpiler: ${n.constructor.name} is unimplemented!`)
         }
         return fn.call(this, n);
     }
@@ -266,6 +266,19 @@ export class Transpiler {
             type: "IfStatement",
             test: this.visit(e.condition),
             consequent: this.visit(e.scope)
+        }
+    }
+
+    visitForStatementNode(e: ast.ForStatementNode): ESTree.ForStatement {
+        return {
+            type: "ForStatement",
+            body: this.visit(e.scope)
+        }
+    }
+
+    visitBreakStatementNode(e: ast.BreakStatementNode): ESTree.BreakStatement {
+        return {
+            type: "BreakStatement"
         }
     }
 

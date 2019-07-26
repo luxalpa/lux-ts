@@ -23,7 +23,7 @@ export class Boolean implements TypeNode {
 export class Function implements TypeNode {
     name: string;
     parameters: TypeNode[];
-    returns: TypeNode;
+    returns: TypeNode | null;
     isStatic: boolean;
 }
 
@@ -101,6 +101,9 @@ export class Context {
         this.types = new Map<string, TypeNode>();
         this.variables = [];
         this.parent = parent;
+        if(parent) {
+            this.owner = parent.owner
+        }
     }
 
     addSubContext(): Context {

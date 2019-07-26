@@ -12,6 +12,8 @@ statement
     | 'return' expr?                      # returnStmt
     | fnCallStatement                     # fnCallStmt
     | 'if' expr scope                     # ifStmt
+    | 'for' scope                         # forInfinityStmt
+    | 'break'                             # breakStmt
     ;
 
 fnCallStatement

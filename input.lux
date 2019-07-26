@@ -1,16 +1,21 @@
 main: () => {
-    v := 5
-    if v = 5 {
-        console.log(100)
+    v := 0
+    for {
+        v = v + 1
+        console.log(v)
+        if v = 5 {
+            break
+        }
     }
 
-    c := Counter.create()
+    /*c := Counter.create()
     it := c.begin()
-    console.log(it.next())
+    console.log(it.next())*/
 }
 
 Iterator: class<T: Type> {
     next: () => T
+    atEnd: () => Boolean
 }
 
 IEnumerable: class<T: Type> {
@@ -26,6 +31,10 @@ CounterIterator: class {
         ret := this.currentValue
         this.currentValue = this.currentValue + 1
         return ret
+    }
+
+    atEnd: () => Boolean {
+        return this.currentValue = 5
     }
 
     @static create: () => CounterIterator {

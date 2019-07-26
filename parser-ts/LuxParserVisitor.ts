@@ -19,6 +19,8 @@ import { AssignStmtContext } from "./LuxParser";
 import { ReturnStmtContext } from "./LuxParser";
 import { FnCallStmtContext } from "./LuxParser";
 import { IfStmtContext } from "./LuxParser";
+import { ForInfinityStmtContext } from "./LuxParser";
+import { BreakStmtContext } from "./LuxParser";
 import { MemberExprContext } from "./LuxParser";
 import { NumberEContext } from "./LuxParser";
 import { IdentifierExprContext } from "./LuxParser";
@@ -208,6 +210,22 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitIfStmt?: (ctx: IfStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forInfinityStmt`
+	 * labeled alternative in `LuxParser.statement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForInfinityStmt?: (ctx: ForInfinityStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `breakStmt`
+	 * labeled alternative in `LuxParser.statement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitBreakStmt?: (ctx: BreakStmtContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `memberExpr`

@@ -56,8 +56,16 @@ export class IfStatementNode extends StatementNode {
     scope: ScopeNode;
 }
 
+export class ForStatementNode extends StatementNode {
+    scope: ScopeNode;
+}
+
 export class ReturnStatementNode extends StatementNode {
     expr?: ExprNode;
+}
+
+export class BreakStatementNode extends StatementNode {
+
 }
 
 export class FunctionCallStmtNode extends StatementNode {

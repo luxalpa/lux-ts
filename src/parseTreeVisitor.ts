@@ -1,31 +1,49 @@
 import {LuxParserVisitor} from "../parser-ts/LuxParserVisitor";
 import {
     AssignStmtContext,
-    BracketExprContext, ClassDecContext, ClassScopeInheritContext, ClassScopeDecNormalContext,
+    BracketExprContext,
+    ClassDecContext,
+    ClassScopeInheritContext,
+    ClassScopeDecNormalContext,
     DecStmtContext,
     EnumDecContext,
     EnumEntryPlainContext,
     EnumScopeContext,
     FnCallParamContext,
     FnCallParamsContext,
-    FnCallStatementContext, FnCallStatementImplicitContext, FnCallStmtContext,
-    FnDefParamFullContext, FnReturnTypeContext, FnReturnTypeSingleContext,
+    FnCallStatementContext,
+    FnCallStatementImplicitContext,
+    FnCallStmtContext,
+    FnDefParamFullContext,
+    FnReturnTypeContext,
+    FnReturnTypeSingleContext,
     FuncDecContext,
     IdentifierExprContext,
     ImplFnCallExprContext,
     InfixExprContext,
     LuxParser,
-    LvalueIDContext, MemberExprContext,
-    NumberEContext, ObjectLiteralExprContext,
+    LvalueIDContext,
+    MemberExprContext,
+    NumberEContext,
+    ObjectLiteralExprContext,
     PlainTypeContext,
     ProgramContext,
     ReturnStmtContext,
-    ScopeContext, TaggedDeclarationContext, TagsContext,
+    ScopeContext,
+    TaggedDeclarationContext,
+    TagsContext,
     TypeDecContext,
     TypePlainContext,
-    VarDecContext, VarDefAssignExplicitContext,
+    VarDecContext,
+    VarDefAssignExplicitContext,
     VarDefAssignImplicitContext,
-    VarDefOnlyContext, TmplDefParamFullContext, TmplParamContext, NormalTypeContext, LvalueMemberContext, IfStmtContext
+    VarDefOnlyContext,
+    TmplDefParamFullContext,
+    TmplParamContext,
+    NormalTypeContext,
+    LvalueMemberContext,
+    IfStmtContext,
+    ForInfinityStmtContext, BreakStmtContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -228,8 +246,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
     visitReturnStmt(ctx: ReturnStmtContext): ast.ReturnStatementNode {
         return create(ast.ReturnStatementNode, {
-            expr: this.visit(ctx.expr())
+            expr: ctx.expr() ? this.visit(ctx.expr()) : undefined
         })
+    }
+
+    visitBreakStmt(ctx: BreakStmtContext): ast.BreakStatementNode {
+        return create(ast.BreakStatementNode, {});
     }
 
     visitEnumDec(ctx: EnumDecContext): ast.EnumDecNode {
@@ -313,6 +335,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         return create(ast.IfStatementNode, {
             condition: this.visit(ctx.expr()),
             scope: this.visit(ctx.scope()),
+        })
+    }
+
+    visitForInfinityStmt(ctx: ForInfinityStmtContext): ast.ForStatementNode {
+        return create(ast.ForStatementNode, {
+            scope: this.visit(ctx.scope())
         })
     }
 

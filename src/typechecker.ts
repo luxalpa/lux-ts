@@ -1,4 +1,5 @@
 import * as ast from "./ast";
+import {InfixOperator} from "./ast";
 import * as types from "./typenodes";
 import {create} from "./util";
 import cloneDeep from "lodash.clonedeep"
@@ -204,13 +205,33 @@ export class TypeChecker {
         if (typeMap.get(n.left) !== typeMap.get(n.right)) {
             throw "Left and right value have different type"
         }
-        typeMap.set(n, typeMap.get(n.left));
+
+        switch (n.operator) {
+            case InfixOperator.Equals:
+            case InfixOperator.Unequals:
+                typeMap.set(n, context.getType("Boolean"));
+                break;
+            default:
+                typeMap.set(n, typeMap.get(n.left));
+                break;
+        }
     }
 
     visitReturnStatementNode(n: ast.ReturnStatementNode, context: types.Context, typeMap: TypeMap) {
-        this.visit(n.expr, context, typeMap);
-        if (!this.isTypeEqual((<types.Function>context.owner).returns, typeMap.get(n.expr))) {
-            throw "Return value doesn't match to function"
+        const fn = <types.Function>context.owner;
+        if(!n.expr) {
+            if(fn.returns) {
+                throw new Error(`Function needs to return a value (${fn.returns.constructor.name})`);
+            }
+        } else {
+            this.visit(n.expr, context, typeMap);
+            if(!fn.returns) {
+                throw new Error(`Function should not return a value, but got (${n.expr.constructor.name})`);
+            }
+
+            if (!this.isTypeEqual(fn.returns, typeMap.get(n.expr))) {
+                throw "Return value doesn't match to function"
+            }
         }
     }
 
@@ -236,6 +257,17 @@ export class TypeChecker {
         for(const stmt of n.scope.statements) {
             this.visit(stmt, ctx, typeMap);
         }
+    }
+
+    visitForStatementNode(n: ast.ForStatementNode, context: types.Context, typeMap: TypeMap) {
+        let ctx = context.addSubContext();
+        for(const stmt of n.scope.statements) {
+            this.visit(stmt, ctx, typeMap);
+        }
+    }
+
+    visitBreakStatementNode(n: ast.BreakStatementNode, context: types.Context, typeMap: TypeMap) {
+        // Intentionally left blank.
     }
 
     isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
@@ -469,6 +501,7 @@ export class ClassFactory {
             inherits: [],
             abstract: false,
         });
+
         cl.members.owner = cl;
         this.typemap.set(n, cl);
 
