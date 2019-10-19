@@ -12,8 +12,15 @@ statement
     | 'return' expr?                      # returnStmt
     | fnCallStatement                     # fnCallStmt
     | 'if' expr scope                     # ifStmt
-    | 'for' scope                         # forInfinityStmt
     | 'break'                             # breakStmt
+    | forStatement scope                  # forStmt
+    ;
+
+forStatement
+    : 'for'                               # forInfinityStmt
+    | 'for' lvalue '=' expr               # forAssignStmt
+    | 'for' ID ':' vtype? '=' expr        # forVarDefStmt
+    | 'for' expr                          # forExprStmt
     ;
 
 fnCallStatement

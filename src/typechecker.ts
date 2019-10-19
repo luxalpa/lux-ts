@@ -3,6 +3,7 @@ import {InfixOperator} from "./ast";
 import * as types from "./typenodes";
 import {create} from "./util";
 import cloneDeep from "lodash.clonedeep"
+import {OverloadedFunction} from "./typenodes";
 
 type TypeMap = Map<ast.Node, types.TypeNode>;
 
@@ -66,14 +67,14 @@ export class TypeChecker {
 
     visit(n: ast.Node, context: types.Context, typeMap: TypeMap) {
         if (!n) {
-            throw "visit: Node to visit is undefined"
+            throw new Error("visit: Node to visit is undefined")
         }
         if (n.constructor.name == "Object") {
-            throw `Object without type: (${JSON.stringify(n)})`
+            throw new Error(`Object without type: (${JSON.stringify(n)})`)
         }
         let fn = this['visit' + n.constructor.name];
         if (!fn) {
-            throw `TypeChecker: ${n.constructor.name} is unimplemented!`
+            throw new Error(`TypeChecker: ${n.constructor.name} is unimplemented!`)
         }
         return fn.call(this, n, context, typeMap);
     }
@@ -84,7 +85,6 @@ export class TypeChecker {
         if (n.init) {
             this.visit(n.init, context, typemap);
         }
-
 
         if (n.type) {
             type = context.getType(n.type.name, n.type.templateParams);
@@ -253,6 +253,9 @@ export class TypeChecker {
 
     visitIfStatementNode(n: ast.IfStatementNode, context: types.Context, typeMap: TypeMap) {
         this.visit(n.condition, context, typeMap);
+        if(typeMap.get(n.condition) !== (context.getType("Boolean") as types.TypeNode)) {
+            throw new Error("If condition must be boolean!")
+        }
         let ctx = context.addSubContext();
         for(const stmt of n.scope.statements) {
             this.visit(stmt, ctx, typeMap);
@@ -262,6 +265,66 @@ export class TypeChecker {
     visitForStatementNode(n: ast.ForStatementNode, context: types.Context, typeMap: TypeMap) {
         let ctx = context.addSubContext();
         for(const stmt of n.scope.statements) {
+            this.visit(stmt, ctx, typeMap);
+        }
+    }
+
+    visitForExprStatementNode(n: ast.ForExprStatementNode, context: types.Context, typeMap: TypeMap) {
+        this.visit(n.expr, context, typeMap);
+        const t = typeMap.get(n.expr);
+        if(!(t instanceof types.Class)) {
+            throw new Error("For Expression needs to be a Class!")
+        }
+        let found = false;
+        for(const c of t.allParentClasses()) {
+            if(c.name === "Iterator") {
+                // TODO: Fix for namespacing
+                found = true;
+                break;
+            }
+        }
+        if(!found) {
+            throw new Error("For Expression needs to be an Iterator!")
+        }
+
+        let ctx = context.addSubContext();
+        for(const stmt of n.scope.statements) { // TODO: Add visitor for scope
+            this.visit(stmt, ctx, typeMap);
+        }
+    }
+
+    visitForVarDefStatementNode(n: ast.ForVarDefStatementNode, context: types.Context, typeMap: TypeMap) {
+        this.visit(n.expr, context, typeMap);
+        let ctx = context.addSubContext();
+
+        // Resolve the Iterators type
+        const t = typeMap.get(n.expr);
+        if(!(t instanceof types.Class)) {
+            throw new Error("For Expression needs to be a Class!")
+        }
+        let found = false;
+        let nextType: types.TypeNode;
+        for(const c of t.allParentClasses()) {
+            if(c.name === "Iterator") {
+                // TODO: Fix for namespacing
+
+                nextType = (c.getMember("next") as OverloadedFunction).functions[0].returns;
+                ctx.addVariable(n.id, nextType);
+                found = true;
+                break;
+            }
+        }
+        if(!found) {
+            throw new Error("For Expression needs to be an Iterator!")
+        }
+
+        if(n.type) {
+            if(!this.isTypeEqual(context.getType(n.type.name, n.type.templateParams), nextType)) {
+                throw new Error("For Expression type does not match requested type!")
+            }
+        }
+
+        for(const stmt of n.scope.statements) { // TODO: Add visitor for scope
             this.visit(stmt, ctx, typeMap);
         }
     }

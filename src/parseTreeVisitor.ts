@@ -43,7 +43,7 @@ import {
     NormalTypeContext,
     LvalueMemberContext,
     IfStmtContext,
-    ForInfinityStmtContext, BreakStmtContext
+    ForInfinityStmtContext, BreakStmtContext, ForStmtContext, ForExprStmtContext, ForVarDefStmtContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -338,9 +338,32 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         })
     }
 
+    visitForStmt(ctx: ForStmtContext): ast.ForStatementNode {
+        let stmt: ast.ForStatementNode = this.visit(ctx.forStatement());
+        stmt.scope = this.visit(ctx.scope());
+        return stmt;
+    }
+
     visitForInfinityStmt(ctx: ForInfinityStmtContext): ast.ForStatementNode {
+        // Return incomplete For Statement.
         return create(ast.ForStatementNode, {
-            scope: this.visit(ctx.scope())
+            scope: undefined
+        })
+    }
+
+    visitForExprStmt(ctx: ForExprStmtContext): ast.ForExprStatementNode {
+        return create(ast.ForExprStatementNode, {
+            expr: this.visit(ctx.expr()),
+            scope: undefined
+        })
+    }
+
+    visitForVarDefStmt(ctx: ForVarDefStmtContext): ast.Node {
+        return create(ast.ForVarDefStatementNode, {
+            expr: this.visit(ctx.expr()),
+            id: ctx.ID().text,
+            type: ctx.vtype() ? this.visit(ctx.vtype()) as ast.TypeNode : undefined,
+            scope: undefined,
         })
     }
 

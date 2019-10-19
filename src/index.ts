@@ -34,7 +34,7 @@ try {
             console.log(text);
         }
 
-        eval(code + "; main();");
+         eval(code + "; main();");
     })();
 } catch (e) {
     console.error(e);

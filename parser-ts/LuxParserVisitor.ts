@@ -19,8 +19,8 @@ import { AssignStmtContext } from "./LuxParser";
 import { ReturnStmtContext } from "./LuxParser";
 import { FnCallStmtContext } from "./LuxParser";
 import { IfStmtContext } from "./LuxParser";
-import { ForInfinityStmtContext } from "./LuxParser";
 import { BreakStmtContext } from "./LuxParser";
+import { ForStmtContext } from "./LuxParser";
 import { MemberExprContext } from "./LuxParser";
 import { NumberEContext } from "./LuxParser";
 import { IdentifierExprContext } from "./LuxParser";
@@ -31,6 +31,10 @@ import { ObjectLiteralExprContext } from "./LuxParser";
 import { FnReturnTypeSingleContext } from "./LuxParser";
 import { ClassScopeDecNormalContext } from "./LuxParser";
 import { ClassScopeInheritContext } from "./LuxParser";
+import { ForInfinityStmtContext } from "./LuxParser";
+import { ForAssignStmtContext } from "./LuxParser";
+import { ForVarDefStmtContext } from "./LuxParser";
+import { ForExprStmtContext } from "./LuxParser";
 import { NormalTypeContext } from "./LuxParser";
 import { TypeInTypeContext } from "./LuxParser";
 import { VarDecContext } from "./LuxParser";
@@ -46,6 +50,7 @@ import { VarDefAssignExplicitContext } from "./LuxParser";
 import { FnCallStatementImplicitContext } from "./LuxParser";
 import { ProgramContext } from "./LuxParser";
 import { StatementContext } from "./LuxParser";
+import { ForStatementContext } from "./LuxParser";
 import { FnCallStatementContext } from "./LuxParser";
 import { LvalueContext } from "./LuxParser";
 import { TaggedDeclarationContext } from "./LuxParser";
@@ -212,20 +217,20 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitIfStmt?: (ctx: IfStmtContext) => Result;
 
 	/**
-	 * Visit a parse tree produced by the `forInfinityStmt`
-	 * labeled alternative in `LuxParser.statement`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitForInfinityStmt?: (ctx: ForInfinityStmtContext) => Result;
-
-	/**
 	 * Visit a parse tree produced by the `breakStmt`
 	 * labeled alternative in `LuxParser.statement`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	visitBreakStmt?: (ctx: BreakStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forStmt`
+	 * labeled alternative in `LuxParser.statement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForStmt?: (ctx: ForStmtContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `memberExpr`
@@ -306,6 +311,38 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitClassScopeInherit?: (ctx: ClassScopeInheritContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forInfinityStmt`
+	 * labeled alternative in `LuxParser.forStatement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForInfinityStmt?: (ctx: ForInfinityStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forAssignStmt`
+	 * labeled alternative in `LuxParser.forStatement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForAssignStmt?: (ctx: ForAssignStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forVarDefStmt`
+	 * labeled alternative in `LuxParser.forStatement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForVarDefStmt?: (ctx: ForVarDefStmtContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `forExprStmt`
+	 * labeled alternative in `LuxParser.forStatement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForExprStmt?: (ctx: ForExprStmtContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `normalType`
@@ -424,6 +461,13 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitStatement?: (ctx: StatementContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `LuxParser.forStatement`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitForStatement?: (ctx: ForStatementContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `LuxParser.fnCallStatement`.

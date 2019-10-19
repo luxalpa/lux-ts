@@ -60,6 +60,21 @@ export class ForStatementNode extends StatementNode {
     scope: ScopeNode;
 }
 
+export class ForAssignStatementNode extends ForStatementNode {
+    left: ExprNode;
+    right: ExprNode;
+}
+
+export class ForExprStatementNode extends ForStatementNode {
+    expr: ExprNode;
+}
+
+export class ForVarDefStatementNode extends ForStatementNode {
+    id: string;
+    type?: TypeNode;
+    expr: ExprNode;
+}
+
 export class ReturnStatementNode extends StatementNode {
     expr?: ExprNode;
 }

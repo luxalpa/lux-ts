@@ -276,6 +276,105 @@ export class Transpiler {
         }
     }
 
+    visitForExprStatementNode(e: ast.ForExprStatementNode): ESTree.ForStatement {
+        return this.makeForStatement(e.scope, e.expr);
+    }
+
+    visitForVarDefStatementNode(e: ast.ForVarDefStatementNode): ESTree.ForStatement {
+        return this.makeForStatement(e.scope, e.expr, {
+            type: "AssignmentExpression",
+            operator: "=",
+            left: {
+                type: "Identifier",
+                name: e.id
+            },
+            right: undefined
+        }, {
+            type: "VariableDeclarator",
+            id: {
+                type: "Identifier",
+                name: e.id
+            }
+        })
+    }
+
+    makeForStatement(body: ast.ScopeNode, expr: ast.ExprNode, optAssign?: ESTree.AssignmentExpression, optDeclaration?: ESTree.VariableDeclarator): ESTree.ForStatement {
+        const loopTemp = "_loopTemp"; // TODO: Make unique
+
+        let init = this.visit(expr);
+
+        let updateExpr: ESTree.Expression = {
+            type: "CallExpression",
+            arguments: [],
+            callee: {
+                type: "MemberExpression",
+                object: {
+                    type: "Identifier",
+                    name: loopTemp
+                },
+                property: {
+                    type: "Identifier",
+                    name: "next"
+                },
+                computed: false
+            }
+        };
+
+        if(optAssign) {
+            updateExpr = {
+                ...optAssign,
+                right: updateExpr
+            }
+        }
+
+        let declarations: ESTree.VariableDeclarator[] = [
+            {
+                type: "VariableDeclarator",
+                id: {
+                    type: "Identifier",
+                    name: loopTemp
+                },
+                init
+            }
+        ];
+
+        if(optDeclaration) {
+            declarations.push(optDeclaration);
+        }
+
+        return {
+            type: "ForStatement",
+            body: this.visit(body),
+            init: {
+                type: "VariableDeclaration",
+                kind: "let",
+                declarations
+            },
+            test: {
+                type: "UnaryExpression",
+                operator: "!",
+                prefix: true,
+                argument: {
+                    type: "CallExpression",
+                    arguments: [],
+                    callee: {
+                        type: "MemberExpression",
+                        object: {
+                            type: "Identifier",
+                            name: loopTemp
+                        },
+                        property: {
+                            type: "Identifier",
+                            name: "atEnd"
+                        },
+                        computed: false
+                    }
+                }
+            },
+            update: updateExpr
+        }
+    }
+
     visitBreakStatementNode(e: ast.BreakStatementNode): ESTree.BreakStatement {
         return {
             type: "BreakStatement"

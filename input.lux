@@ -1,16 +1,13 @@
 main: () => {
-    v := 0
-    for {
-        v = v + 1
-        console.log(v)
-        if v = 5 {
-            break
-        }
-    }
+    c := Counter.create()
 
-    /*c := Counter.create()
-    it := c.begin()
-    console.log(it.next())*/
+    for i := Counter.create() {
+        console.log(i)
+    }
+}
+
+Dragon: class {
+
 }
 
 Iterator: class<T: Type> {
@@ -22,7 +19,7 @@ IEnumerable: class<T: Type> {
     begin: () => Iterator<T>
 }
 
-CounterIterator: class {
+Counter: class {
     inherit Iterator<Integer>
 
     currentValue: Integer
@@ -34,22 +31,10 @@ CounterIterator: class {
     }
 
     atEnd: () => Boolean {
-        return this.currentValue = 5
+        return this.currentValue = 7
     }
-
-    @static create: () => CounterIterator {
-        return [currentValue: 0]
-    }
-}
-
-Counter: class {
-    inherit IEnumerable<Integer>
 
     @static create: () => Counter {
-        return []
-    }
-
-    begin: () => Iterator<Integer> {
-        return CounterIterator.create()
+        return [currentValue: 0]
     }
 }
