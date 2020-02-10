@@ -1,13 +1,13 @@
 main: () => {
     c := Counter.create()
 
-    for i := Counter.create() {
+    for i := range(3, 5) {
         console.log(i)
     }
 }
 
 Dragon: class {
-
+    @static create: (name: Integer) => Dragon
 }
 
 Iterator: class<T: Type> {
@@ -23,6 +23,7 @@ Counter: class {
     inherit Iterator<Integer>
 
     currentValue: Integer
+    max: Integer
 
     next: () => Integer {
         ret := this.currentValue
@@ -31,10 +32,14 @@ Counter: class {
     }
 
     atEnd: () => Boolean {
-        return this.currentValue = 7
+        return this.currentValue = this.max+2
     }
 
     @static create: () => Counter {
-        return [currentValue: 0]
+        return [currentValue: 0, max: 10]
     }
+}
+
+range: (min: Integer, max: Integer) => Counter {
+    return [currentValue: min, max: max]
 }
