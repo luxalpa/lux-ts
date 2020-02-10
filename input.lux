@@ -10,12 +10,12 @@ Dragon: class {
     @static create: (name: Integer) => Dragon
 }
 
-Iterator: class<T: Type> {
+Iterator<T: Type>: class {
     next: () => T
     atEnd: () => Boolean
 }
 
-IEnumerable: class<T: Type> {
+IEnumerable<T: Type>: class {
     begin: () => Iterator<T>
 }
 
