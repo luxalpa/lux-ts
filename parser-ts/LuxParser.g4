@@ -53,6 +53,7 @@ typeDef
     : ID tmplDefParamList? ':' fnDef               # funcDec
     | ID tmplDefParamList? ':' 'enum' enumScope    # enumDec
     | ID tmplDefParamList? ':' 'class' classScope  # classDec
+    | ID tmplDefParamList? ':' 'alias' vtype       # aliasDec
     ;
 
 fnDef

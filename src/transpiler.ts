@@ -83,6 +83,10 @@ export class Transpiler {
         continue;
       }
 
+      if (declaration instanceof ast.AliasDecNode) {
+        continue;
+      }
+
       let s = this.visit(declaration);
       if (Array.isArray(s)) {
         for (let x of s) {

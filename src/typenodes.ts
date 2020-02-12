@@ -1,6 +1,6 @@
 import * as ast from "./ast";
 import {create} from "./util";
-import {ClassFactory} from "./typechecker";
+import {AliasFactory, ClassFactory} from "./typechecker";
 
 export interface TypeNode {
 
@@ -134,7 +134,7 @@ export class Context {
             throw new Error(`Type "${name}" not found`);
         }
 
-        if (typeNode instanceof ClassFactory) {
+        if (typeNode instanceof ClassFactory || typeNode instanceof AliasFactory) {
             const templateParams = params.map(param => {
                 if (param instanceof ast.ExprNode) {
                     throw new Error("Expression Templates not yet supported!");

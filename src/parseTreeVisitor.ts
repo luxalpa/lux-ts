@@ -1,49 +1,49 @@
 import {LuxParserVisitor} from "../parser-ts/LuxParserVisitor";
 import {
-    AssignStmtContext,
-    BracketExprContext,
-    ClassDecContext,
-    ClassScopeInheritContext,
-    ClassScopeDecNormalContext,
-    DecStmtContext,
-    EnumDecContext,
-    EnumEntryPlainContext,
-    EnumScopeContext,
-    FnCallParamContext,
-    FnCallParamsContext,
-    FnCallStatementContext,
-    FnCallStatementImplicitContext,
-    FnCallStmtContext,
-    FnDefParamFullContext,
-    FnReturnTypeContext,
-    FnReturnTypeSingleContext,
-    FuncDecContext,
-    IdentifierExprContext,
-    ImplFnCallExprContext,
-    InfixExprContext,
-    LuxParser,
-    LvalueIDContext,
-    MemberExprContext,
-    NumberEContext,
-    ObjectLiteralExprContext,
-    PlainTypeContext,
-    ProgramContext,
-    ReturnStmtContext,
-    ScopeContext,
-    TaggedDeclarationContext,
-    TagsContext,
-    TypeDecContext,
-    TypePlainContext,
-    VarDecContext,
-    VarDefAssignExplicitContext,
-    VarDefAssignImplicitContext,
-    VarDefOnlyContext,
-    TmplDefParamFullContext,
-    TmplParamContext,
-    NormalTypeContext,
-    LvalueMemberContext,
-    IfStmtContext,
-    ForInfinityStmtContext, BreakStmtContext, ForStmtContext, ForExprStmtContext, ForVarDefStmtContext
+  AssignStmtContext,
+  BracketExprContext,
+  ClassDecContext,
+  ClassScopeInheritContext,
+  ClassScopeDecNormalContext,
+  DecStmtContext,
+  EnumDecContext,
+  EnumEntryPlainContext,
+  EnumScopeContext,
+  FnCallParamContext,
+  FnCallParamsContext,
+  FnCallStatementContext,
+  FnCallStatementImplicitContext,
+  FnCallStmtContext,
+  FnDefParamFullContext,
+  FnReturnTypeContext,
+  FnReturnTypeSingleContext,
+  FuncDecContext,
+  IdentifierExprContext,
+  ImplFnCallExprContext,
+  InfixExprContext,
+  LuxParser,
+  LvalueIDContext,
+  MemberExprContext,
+  NumberEContext,
+  ObjectLiteralExprContext,
+  PlainTypeContext,
+  ProgramContext,
+  ReturnStmtContext,
+  ScopeContext,
+  TaggedDeclarationContext,
+  TagsContext,
+  TypeDecContext,
+  TypePlainContext,
+  VarDecContext,
+  VarDefAssignExplicitContext,
+  VarDefAssignImplicitContext,
+  VarDefOnlyContext,
+  TmplDefParamFullContext,
+  TmplParamContext,
+  NormalTypeContext,
+  LvalueMemberContext,
+  IfStmtContext,
+  ForInfinityStmtContext, BreakStmtContext, ForStmtContext, ForExprStmtContext, ForVarDefStmtContext, AliasDecContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -277,6 +277,22 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
             name: create(ast.IdentifierNode, {name: ctx.ID().text}),
             value: null
         })
+    }
+
+
+    visitAliasDec(ctx: AliasDecContext): ast.Node {
+      let templateParams: ast.VarDecNode[] = [];
+
+      if(ctx.tmplDefParamList()) {
+        const defParams = ctx.tmplDefParamList().tmplDefParam();
+        templateParams = defParams.map<ast.VarDecNode>(dec => this.visit(dec));
+      }
+
+      return create(ast.AliasDecNode, {
+        left: create(ast.IdentifierNode, {name: ctx.ID().text}),
+        templateParams,
+        alias: this.visit(ctx.vtype())
+      })
     }
 
     visitFnCallStmt(ctx: FnCallStmtContext): ast.FunctionCallStmtNode {

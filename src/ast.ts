@@ -141,3 +141,9 @@ export class ProgramNode extends Node {
 export class InheritNode extends DeclarationNode {
     class: TypeNode;
 }
+
+export class AliasDecNode extends DeclarationNode {
+  left: IdentifierNode;
+  templateParams: VarDecNode[];
+  alias: TypeNode;
+}

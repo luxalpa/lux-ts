@@ -14,6 +14,7 @@ import { EnumEntryPlainContext } from "./LuxParser";
 import { FuncDecContext } from "./LuxParser";
 import { EnumDecContext } from "./LuxParser";
 import { ClassDecContext } from "./LuxParser";
+import { AliasDecContext } from "./LuxParser";
 import { DecStmtContext } from "./LuxParser";
 import { AssignStmtContext } from "./LuxParser";
 import { ReturnStmtContext } from "./LuxParser";
@@ -175,6 +176,14 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitClassDec?: (ctx: ClassDecContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `aliasDec`
+	 * labeled alternative in `LuxParser.typeDef`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitAliasDec?: (ctx: AliasDecContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `decStmt`
