@@ -43,7 +43,13 @@ import {
   NormalTypeContext,
   LvalueMemberContext,
   IfStmtContext,
-  ForInfinityStmtContext, BreakStmtContext, ForStmtContext, ForExprStmtContext, ForVarDefStmtContext, AliasDecContext
+  ForInfinityStmtContext,
+  BreakStmtContext,
+  ForStmtContext,
+  ForExprStmtContext,
+  ForVarDefStmtContext,
+  AliasDecContext,
+  TypeRefContext
 } from "../parser-ts/LuxParser";
 import {ErrorNode, ParseTree, RuleNode, TerminalNode} from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -159,10 +165,16 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     visitNormalType(ctx: NormalTypeContext): ast.TypeNode {
-        return create(ast.TypeNode, {
+        return create(ast.PlainTypeNode, {
             name: ctx.ID().text,
             templateParams: ctx.tmplParam().map(p => this.visit(p))
         });
+    }
+
+    visitTypeRef(ctx: TypeRefContext): ast.RefTypeNode {
+      return create(ast.RefTypeNode, {
+        type: this.visit(ctx.plainType())
+      })
     }
 
     visitTmplParam(ctx: TmplParamContext): ast.TypeNode | ast.ExprNode {

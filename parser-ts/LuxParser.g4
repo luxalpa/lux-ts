@@ -134,6 +134,7 @@ expr : left=expr '.' right=ID              # memberExpr
     | value=NUMBER                         # numberE
     | id=ID                                # identifierExpr
     | '(' expr ')'                         # bracketExpr
+    | '&' expr                             # refExpr
     | left=expr op=('*' | '/') right=expr  # infixExpr
     | left=expr op=('+' | '-') right=expr  # infixExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr

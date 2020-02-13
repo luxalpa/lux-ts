@@ -43,14 +43,14 @@ export class TypeChecker {
       "log",
       create(types.Function, {
         name: "log",
-        parameters: [context.getType("Integer")]
+        parameters: [context.getTypeByString("Integer")]
       })
     );
     cc.addVariable(
       "log",
       create(types.Function, {
         name: "log",
-        parameters: [context.getType("Boolean")]
+        parameters: [context.getTypeByString("Boolean")]
       })
     );
 
@@ -64,8 +64,8 @@ export class TypeChecker {
       })
     );
 
-    context.addVariable("false", context.getType("Boolean"));
-    context.addVariable("true", context.getType("Boolean"));
+    context.addVariable("false", context.getTypeByString("Boolean"));
+    context.addVariable("true", context.getTypeByString("Boolean"));
   }
 
   visit(n: ast.Node, context: types.Context, typeMap: TypeMap) {
@@ -90,7 +90,7 @@ export class TypeChecker {
     }
 
     if (n.type) {
-      type = context.getType(n.type.name, n.type.templateParams);
+      type = context.getType(n.type);
       if (n.init) {
         let t = typemap.get(n.init);
 
@@ -216,7 +216,7 @@ export class TypeChecker {
   }
 
   visitNumberNode(n: ast.NumberNode, context: types.Context, typeMap: TypeMap) {
-    typeMap.set(n, context.getType("Integer"));
+    typeMap.set(n, context.getTypeByString("Integer"));
   }
 
   visitAssignmentStatementNode(
@@ -245,7 +245,7 @@ export class TypeChecker {
     switch (n.operator) {
       case InfixOperator.Equals:
       case InfixOperator.Unequals:
-        typeMap.set(n, context.getType("Boolean"));
+        typeMap.set(n, context.getTypeByString("Boolean"));
         break;
       default:
         typeMap.set(n, typeMap.get(n.left));
@@ -309,7 +309,7 @@ export class TypeChecker {
     this.visit(n.condition, context, typeMap);
     if (
       typeMap.get(n.condition) !==
-      (context.getType("Boolean") as types.TypeNode)
+      (context.getTypeByString("Boolean") as types.TypeNode)
     ) {
       throw new Error("If condition must be boolean!");
     }
@@ -392,7 +392,7 @@ export class TypeChecker {
     if (n.type) {
       if (
         !this.isTypeEqual(
-          context.getType(n.type.name, n.type.templateParams),
+          context.getType(n.type),
           nextType
         )
       ) {
@@ -495,7 +495,7 @@ class TypeResolver {
           n.name.name,
           create(types.Enum, {
             name: n.name.name,
-            internalType: context.getType("Integer"),
+            internalType: context.getTypeByString("Integer"),
             members: n.entries.map(v => v.name.name)
           })
         );
@@ -535,10 +535,10 @@ class TypeResolver {
     let fnType = create(types.Function, {
       name: n.name.name,
       parameters: n.params.map(value => {
-        return context.getType(value.type.name, value.type.templateParams);
+        return context.getType(value.type);
       }),
       returns: n.returns
-        ? context.getType(n.returns.name, n.returns.templateParams)
+        ? context.getType(n.returns)
         : null,
       isStatic
     });
@@ -562,7 +562,7 @@ class TypeResolver {
     let type: types.TypeNode;
 
     if (n.type) {
-      type = context.getType(n.type.name, n.type.templateParams);
+      type = context.getType(n.type);
       if (n.init) {
         this.addTypeChecked(n.init, context, type);
       }
@@ -573,7 +573,7 @@ class TypeResolver {
   }
 
   visitInheritNode(n: ast.InheritNode, context: types.Context) {
-    let type = context.getType(n.class.name, n.class.templateParams);
+    let type = context.getType(n.class);
     if (!(type instanceof types.Class)) {
       throw new Error(`${type.constructor.name} is not a Class`);
     }
@@ -683,7 +683,7 @@ export class ClassFactory {
     for (let i = 0; i < this.classDecNode.templateParams.length; i++) {
       let paramDef = this.classDecNode.templateParams[i];
       let paramVal = templateParams[i];
-      if (paramDef.type.name === "Type") {
+      if (paramDef.type instanceof ast.PlainTypeNode && paramDef.type.name === "Type") {
         cl.members.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
@@ -721,7 +721,7 @@ export class AliasFactory {
     for (let i = 0; i < this.node.templateParams.length; i++) {
       let paramDef = this.node.templateParams[i];
       let paramVal = templateParams[i];
-      if (paramDef.type.name === "Type") {
+      if (paramDef.type instanceof ast.PlainTypeNode && paramDef.type.name === "Type") {
         subcontext.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
@@ -730,6 +730,6 @@ export class AliasFactory {
       }
     }
 
-    return subcontext.getType(alias.name, alias.templateParams)
+    return subcontext.getType(alias)
   }
 }

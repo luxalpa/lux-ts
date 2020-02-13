@@ -130,8 +130,16 @@ export class EnumEntryNode extends Node {
 }
 
 export class TypeNode extends Node {
-    name?: string;
+
+}
+
+export class PlainTypeNode extends TypeNode {
+    name: string;
     templateParams: (TypeNode | ExprNode)[];
+}
+
+export class RefTypeNode extends TypeNode {
+    type: TypeNode
 }
 
 export class ProgramNode extends Node {

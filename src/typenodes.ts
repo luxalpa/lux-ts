@@ -86,6 +86,11 @@ export class OverloadedFunction implements TypeNode {
     functions: Function[]
 }
 
+// &Type
+export class RefType implements TypeNode {
+  ref: TypeNode
+}
+
 interface ContextSymbol {
     name: string;
     type: TypeNode;
@@ -121,7 +126,21 @@ export class Context {
         }
     }
 
-    getType(name: string, params: (ast.TypeNode | ast.ExprNode)[] = []): TypeNode {
+    getType(node: ast.TypeNode): TypeNode {
+      if(node instanceof ast.PlainTypeNode) {
+        return this.getTypeByString(node.name, node.templateParams)
+      }
+      if(node instanceof ast.RefTypeNode) {
+        const ref = this.getType(node.type);
+        return create(RefType, {
+          ref
+        })
+      }
+      console.log(node);
+      throw new Error("unknown TypeNode")
+    }
+
+    getTypeByString(name: string, params: (ast.TypeNode | ast.ExprNode)[] = []): TypeNode {
         let typeNode: TypeNode;
         for (const ctx of this.getAllContexts()) {
             typeNode = ctx.types.get(name);
@@ -139,7 +158,7 @@ export class Context {
                 if (param instanceof ast.ExprNode) {
                     throw new Error("Expression Templates not yet supported!");
                 } else {
-                    return this.getType(param.name, param.templateParams);
+                    return this.getType(param);
                 }
             });
 

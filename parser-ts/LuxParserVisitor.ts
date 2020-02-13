@@ -26,6 +26,7 @@ import { MemberExprContext } from "./LuxParser";
 import { NumberEContext } from "./LuxParser";
 import { IdentifierExprContext } from "./LuxParser";
 import { BracketExprContext } from "./LuxParser";
+import { RefExprContext } from "./LuxParser";
 import { InfixExprContext } from "./LuxParser";
 import { ImplFnCallExprContext } from "./LuxParser";
 import { ObjectLiteralExprContext } from "./LuxParser";
@@ -272,6 +273,14 @@ export interface LuxParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitBracketExpr?: (ctx: BracketExprContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by the `refExpr`
+	 * labeled alternative in `LuxParser.expr`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitRefExpr?: (ctx: RefExprContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by the `infixExpr`

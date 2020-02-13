@@ -1,4 +1,6 @@
 main: () => {
+    x := 50
+    val: &Integer = &x
     c := Counter.create()
     x: Phoenix<Boolean> = [name: false]
     y: Dragon<Boolean> = x
