@@ -223,6 +223,21 @@ export class TypeChecker {
     );
   }
 
+  visitDerefExprNode(
+    n: ast.RefExprNode,
+    context: types.Context,
+    typeMap: TypeMap
+  ) {
+    this.visit(n.expr, context, typeMap);
+    const t = typeMap.get(n.expr);
+
+    if (!(t instanceof types.RefType)) {
+      throw new Error("Can only dereference pointers");
+    }
+
+    typeMap.set(n, t.ref);
+  }
+
   visitNumberNode(n: ast.NumberNode, context: types.Context, typeMap: TypeMap) {
     typeMap.set(n, context.getTypeByString("Integer"));
   }
@@ -444,10 +459,10 @@ export function isTypeEqual(
   }
 
   if (strong instanceof types.RefType) {
-    if(!(weak instanceof types.RefType)) {
+    if (!(weak instanceof types.RefType)) {
       return false;
     }
-    return isTypeEqual(strong.ref, weak.ref)
+    return isTypeEqual(strong.ref, weak.ref);
   }
 
   return strong === weak;

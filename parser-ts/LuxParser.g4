@@ -133,12 +133,13 @@ varDef
 expr : left=expr '.' right=ID              # memberExpr
     | value=NUMBER                         # numberE
     | id=ID                                # identifierExpr
-    | '(' expr ')'                         # bracketExpr
     | '&' expr                             # refExpr
+    | '*' expr                             # derefExpr
+    | '(' expr ')'                         # bracketExpr
+    | expr '(' fnCallParams? ')'           # implFnCallExpr
     | left=expr op=('*' | '/') right=expr  # infixExpr
     | left=expr op=('+' | '-') right=expr  # infixExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr
-    | expr '(' fnCallParams? ')'           # implFnCallExpr
     | '[' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* ']' # objectLiteralExpr
     ;
 

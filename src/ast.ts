@@ -43,6 +43,10 @@ export class RefExprNode extends ExprNode {
   expr: ExprNode;
 }
 
+export class DerefExprNode extends ExprNode {
+  expr: ExprNode;
+}
+
 export class IdentifierNode extends Node {
   name: string;
 }

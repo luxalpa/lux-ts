@@ -49,7 +49,7 @@ import {
   ForExprStmtContext,
   ForVarDefStmtContext,
   AliasDecContext,
-  TypeRefContext, RefExprContext
+  TypeRefContext, RefExprContext, DerefExprContext
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -201,6 +201,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
   visitRefExpr(ctx: RefExprContext): ast.RefExprNode {
     return create(ast.RefExprNode, {
+      expr: this.visit(ctx.expr())
+    })
+  }
+
+  visitDerefExpr(ctx: DerefExprContext): ast.DerefExprNode {
+    return create(ast.DerefExprNode, {
       expr: this.visit(ctx.expr())
     })
   }

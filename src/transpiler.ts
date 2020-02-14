@@ -224,6 +224,18 @@ export class Transpiler {
     }
   }
 
+  visitDerefExprNode(e: ast.DerefExprNode): ESTree.Expression {
+    const t = this.typemap.get(e);
+    if(t instanceof types.Class) {
+      return this.visit(e.expr)
+    }
+    return {
+      type: "CallExpression",
+      callee: this.visit(e.expr),
+      arguments: []
+    }
+  }
+
   visitFunctionCallExprNode(
     e: ast.FunctionCallExprNode
   ): ESTree.SimpleCallExpression {
