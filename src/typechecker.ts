@@ -472,7 +472,7 @@ export function resolve(object: types.ObjectLiteral, type: types.TypeNode) {
   if (type instanceof types.Class) {
     for (let entry of object.entries) {
       let target = type.getMember(entry.key);
-      if (target !== entry.value) {
+      if (!isTypeEqual(target, entry.value)) {
         throw new Error("type mismatch in object literal");
       }
     }

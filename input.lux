@@ -1,5 +1,6 @@
 main: () => {
-    y: Dragon<Boolean> = [name: false]
+    v := false
+    y: Dragon<Boolean> = [name: &v]
 
     for i := range(3, 5) {
         console.log(i)
@@ -7,7 +8,7 @@ main: () => {
 }
 
 Dragon<T: Type>: class {
-    name: T
+    name: &T
 }
 
 Phoenix<T: Type>: alias Dragon<T>
