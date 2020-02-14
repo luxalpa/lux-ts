@@ -1,7 +1,8 @@
 main: () => {
-    x := 50
-    val: &Integer = &x
+    phi := 50
+    val: &Integer = &phi
     c := Counter.create()
+    ptrc := &c
     x: Phoenix<Boolean> = [name: false]
     y: Dragon<Boolean> = x
 

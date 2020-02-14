@@ -76,7 +76,7 @@ export class Transpiler {
   }
 
   transpile(program: ast.ProgramNode): ESTree.Program {
-    let stmts = [];
+    let stmts: ESTree.Statement[] = [];
     for (let declaration of program.declarations) {
       if (declaration instanceof ast.ClassDecNode) {
         // These are being done separately
@@ -208,6 +208,20 @@ export class Transpiler {
 
   visitIdentifierExprNode(e: ast.IdentifierExprNode): ESTree.Identifier {
     return this.visit(e.id);
+  }
+
+  visitRefExprNode(e: ast.RefExprNode): ESTree.Expression {
+    const t = this.typemap.get(e.expr);
+
+    if(t instanceof types.Class) {
+      return this.visit(e.expr)
+    }
+    return {
+      type: "ArrowFunctionExpression",
+      expression: true,
+      body: this.visit(e.expr),
+      params: []
+    }
   }
 
   visitFunctionCallExprNode(

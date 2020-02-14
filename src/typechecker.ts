@@ -93,13 +93,7 @@ export class TypeChecker {
       type = context.getType(n.type);
       if (n.init) {
         let t = typemap.get(n.init);
-
-        if (t instanceof types.ObjectLiteral) {
-          this.resolve(t, type);
-          t = t.resolved;
-        }
-
-        if (t !== type) {
+        if (!isTypeEqual(type, t)) {
           throw new Error("type mismatch!");
         }
       }
@@ -215,6 +209,20 @@ export class TypeChecker {
     typeMap.set(n, v);
   }
 
+  visitRefExprNode(
+    n: ast.RefExprNode,
+    context: types.Context,
+    typeMap: TypeMap
+  ) {
+    this.visit(n.expr, context, typeMap);
+    typeMap.set(
+      n,
+      create(types.RefType, {
+        ref: typeMap.get(n.expr)
+      })
+    );
+  }
+
   visitNumberNode(n: ast.NumberNode, context: types.Context, typeMap: TypeMap) {
     typeMap.set(n, context.getTypeByString("Integer"));
   }
@@ -273,7 +281,7 @@ export class TypeChecker {
         );
       }
 
-      if (!this.isTypeEqual(fn.returns, typeMap.get(n.expr))) {
+      if (!isTypeEqual(fn.returns, typeMap.get(n.expr))) {
         throw "Return value doesn't match to function";
       }
     }
@@ -390,12 +398,7 @@ export class TypeChecker {
     }
 
     if (n.type) {
-      if (
-        !this.isTypeEqual(
-          context.getType(n.type),
-          nextType
-        )
-      ) {
+      if (!isTypeEqual(context.getType(n.type), nextType)) {
         throw new Error("For Expression type does not match requested type!");
       }
     }
@@ -413,45 +416,58 @@ export class TypeChecker {
   ) {
     // Intentionally left blank.
   }
+}
 
-  isTypeEqual(strong: types.TypeNode, weak: types.TypeNode): boolean {
-    // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
-    if (weak instanceof types.ObjectLiteral) {
-      if (weak.resolved) {
-        weak = weak.resolved;
-      } else {
-        this.resolve(weak, strong);
-        return true;
-      }
-    } else if (weak instanceof types.Class) {
-      // This also checks for the class itself
-      for (let inherited of weak.allParentClasses()) {
-        if (strong === inherited) {
-          return true;
-        }
-      }
-      return false;
+export function isTypeEqual(
+  strong: types.TypeNode,
+  weak: types.TypeNode
+): boolean {
+  // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
+  if (weak instanceof types.ObjectLiteral) {
+    if (weak.resolved) {
+      weak = weak.resolved;
+      console.log("RARE CASE: TODO: Check this!"); // TODO
     } else {
-      return strong === weak;
+      resolve(weak, strong);
+      return true;
     }
   }
 
-  resolve(object: types.ObjectLiteral, type: types.TypeNode) {
-    if (type instanceof types.Class) {
-      for (let entry of object.entries) {
-        let target = type.getMember(entry.key);
-        if (target !== entry.value) {
-          throw new Error("type mismatch in object literal");
-        }
+  if (weak instanceof types.Class) {
+    // allParentClasses also checks for the class itself
+    for (let inherited of weak.allParentClasses()) {
+      if (strong === inherited) {
+        return true;
       }
-      object.resolved = type;
-      return;
-    } else {
-      throw new Error(
-        "Object literal can only be cast to classes! Was: " +
-          type.constructor.name
-      );
     }
+    return false;
+  }
+
+  if (strong instanceof types.RefType) {
+    if(!(weak instanceof types.RefType)) {
+      return false;
+    }
+    return isTypeEqual(strong.ref, weak.ref)
+  }
+
+  return strong === weak;
+}
+
+export function resolve(object: types.ObjectLiteral, type: types.TypeNode) {
+  if (type instanceof types.Class) {
+    for (let entry of object.entries) {
+      let target = type.getMember(entry.key);
+      if (target !== entry.value) {
+        throw new Error("type mismatch in object literal");
+      }
+    }
+    object.resolved = type;
+    return;
+  } else {
+    throw new Error(
+      "Object literal can only be cast to classes! Was: " +
+        type.constructor.name
+    );
   }
 }
 
@@ -500,7 +516,7 @@ class TypeResolver {
           })
         );
       } else if (n instanceof ast.AliasDecNode) {
-        context.addType(n.left.name, new AliasFactory(this, n, context))
+        context.addType(n.left.name, new AliasFactory(this, n, context));
       } else {
         globalCheck.declarations.push(n);
       }
@@ -537,9 +553,7 @@ class TypeResolver {
       parameters: n.params.map(value => {
         return context.getType(value.type);
       }),
-      returns: n.returns
-        ? context.getType(n.returns)
-        : null,
+      returns: n.returns ? context.getType(n.returns) : null,
       isStatic
     });
 
@@ -646,7 +660,7 @@ export class ClassFactory {
       return resolvedType.class;
     }
 
-    return undefined
+    return undefined;
   }
 
   resolve(templateParams: TemplateParams): types.Class {
@@ -683,7 +697,10 @@ export class ClassFactory {
     for (let i = 0; i < this.classDecNode.templateParams.length; i++) {
       let paramDef = this.classDecNode.templateParams[i];
       let paramVal = templateParams[i];
-      if (paramDef.type instanceof ast.PlainTypeNode && paramDef.type.name === "Type") {
+      if (
+        paramDef.type instanceof ast.PlainTypeNode &&
+        paramDef.type.name === "Type"
+      ) {
         cl.members.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
@@ -704,7 +721,7 @@ export class AliasFactory {
   constructor(
     private resolver: TypeResolver,
     private node: ast.AliasDecNode,
-    private context: types.Context,
+    private context: types.Context
   ) {}
 
   resolve(templateParams: TemplateParams): types.TypeNode {
@@ -721,7 +738,10 @@ export class AliasFactory {
     for (let i = 0; i < this.node.templateParams.length; i++) {
       let paramDef = this.node.templateParams[i];
       let paramVal = templateParams[i];
-      if (paramDef.type instanceof ast.PlainTypeNode && paramDef.type.name === "Type") {
+      if (
+        paramDef.type instanceof ast.PlainTypeNode &&
+        paramDef.type.name === "Type"
+      ) {
         subcontext.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
@@ -730,6 +750,6 @@ export class AliasFactory {
       }
     }
 
-    return subcontext.getType(alias)
+    return subcontext.getType(alias);
   }
 }
