@@ -143,6 +143,10 @@ export class RefTypeNode extends TypeNode {
   type: TypeNode;
 }
 
+export class FunctionTypeNode extends TypeNode {
+
+}
+
 export class ProgramNode extends Node {
   declarations: DeclarationNode[];
 }
