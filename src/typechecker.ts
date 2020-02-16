@@ -43,26 +43,22 @@ export class TypeChecker {
       "log",
       create(types.Function, {
         name: "log",
-        parameters: [context.getTypeByString("Integer")]
+        parameters: [context.getTypeByString("Integer")],
+        isStatic: false,
+        returns: null
       })
     );
     cc.addVariable(
       "log",
       create(types.Function, {
         name: "log",
-        parameters: [context.getTypeByString("Boolean")]
+        parameters: [context.getTypeByString("Boolean")],
+        isStatic: false,
+        returns: null
       })
     );
 
-    context.addVariable(
-      "console",
-      create(types.Class, {
-        name: "console",
-        members: cc,
-        inherits: [],
-        abstract: false
-      })
-    );
+    context.addVariable("console", new types.Class("console", cc));
 
     context.addVariable("false", context.getTypeByString("Boolean"));
     context.addVariable("true", context.getTypeByString("Boolean"));
@@ -688,12 +684,10 @@ export class ClassFactory {
 
     this.usedClasses.push(n);
 
-    let cl: types.Class = <types.Class>(<types.TypeNode>create(types.Class, {
-      name: n.name.name,
-      members: this.context.addSubContext(),
-      inherits: [],
-      abstract: false
-    }));
+    let cl: types.Class = new types.Class(
+      n.name.name,
+      this.context.addSubContext()
+    );
 
     cl.members.owner = cl;
     this.typemap.set(n, cl);

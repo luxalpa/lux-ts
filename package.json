@@ -9,18 +9,18 @@
     "nodemon": "nodemon"
   },
   "dependencies": {
-    "@types/estree": "^0.0.39",
+    "@types/estree": "^0.0.42",
     "@types/lodash.clonedeep": "^4.5.6",
     "antlr4": "^4.7.2",
     "antlr4ts": "^0.5.0-alpha.3",
-    "astring": "^1.4.0",
+    "astring": "^1.4.3",
     "lodash.clonedeep": "^4.5.0",
-    "nodemon": "^1.19.1",
-    "ts-node": "^8.2.0",
-    "typescript": "^3.5.1"
+    "nodemon": "^1.19.4",
+    "ts-node": "^8.6.2",
+    "typescript": "^3.7.5"
   },
   "devDependencies": {
-    "@types/node": "^12.0.8",
+    "@types/node": "^12.12.27",
     "antlr4ts-cli": "^0.5.0-alpha.3",
     "prettier": "^1.19.1"
   }
