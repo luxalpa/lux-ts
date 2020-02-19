@@ -89,7 +89,7 @@ export class TypeChecker {
       type = context.getType(n.type);
       if (n.init) {
         let t = typemap.get(n.init);
-        if (!isTypeEqual(type, t)) {
+        if (!isTypeEqual(type, t, typemap)) {
           throw new Error("type mismatch!");
         }
       }
@@ -293,7 +293,7 @@ export class TypeChecker {
         );
       }
 
-      if (!isTypeEqual(fn.returns, typeMap.get(n.expr))) {
+      if (!isTypeEqual(fn.returns, typeMap.get(n.expr), typeMap)) {
         throw "Return value doesn't match to function";
       }
     }
@@ -410,7 +410,7 @@ export class TypeChecker {
     }
 
     if (n.type) {
-      if (!isTypeEqual(context.getType(n.type), nextType)) {
+      if (!isTypeEqual(context.getType(n.type), nextType, typeMap)) {
         throw new Error("For Expression type does not match requested type!");
       }
     }
@@ -432,7 +432,8 @@ export class TypeChecker {
 
 export function isTypeEqual(
   strong: types.TypeNode,
-  weak: types.TypeNode
+  weak: types.TypeNode,
+  typeMap: TypeMap,
 ): boolean {
   // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
   if (weak instanceof types.ObjectLiteral) {
@@ -440,7 +441,7 @@ export function isTypeEqual(
       weak = weak.resolved;
       console.log("RARE CASE: TODO: Check this!"); // TODO
     } else {
-      resolveObjectLiteral(weak, strong);
+      resolveObjectLiteral(weak, strong, typeMap);
       return true;
     }
   }
@@ -460,12 +461,11 @@ export function isTypeEqual(
       return false;
     }
 
-    return isTypeEqual(strong.ref, weak.ref);
+    return isTypeEqual(strong.ref, weak.ref, typeMap);
   }
 
   // Function pointers
   if(strong instanceof types.FunctionPointer) {
-    console.log("Hey")
     if(!(weak instanceof types.RefType)) {
       return false;
     }
@@ -475,12 +475,12 @@ export function isTypeEqual(
         // TODO: Resolve overloaded functions
         throw new Error("TODO: Resolve weak type!")
       }
-      fn = weak.ref.functions[0]
+      fn = weak.ref.functions[0];
     } else {
       return false;
     }
 
-    if(!isTypeEqual(strong.returns, fn.returns)) {
+    if(!isTypeEqual(strong.returns, fn.returns, typeMap)) {
       return false
     }
 
@@ -491,7 +491,7 @@ export function isTypeEqual(
     // TODO: Support methods (static and with receiver)
 
     for(let i = 0; i < strong.parameters.length; i++) {
-      if(!isTypeEqual(strong.parameters[i], fn.parameters[i])) {
+      if(!isTypeEqual(strong.parameters[i], fn.parameters[i], typeMap)) {
         return false
       }
     }
@@ -502,11 +502,11 @@ export function isTypeEqual(
   return strong === weak;
 }
 
-export function resolveObjectLiteral(object: types.ObjectLiteral, type: types.TypeNode) {
+export function resolveObjectLiteral(object: types.ObjectLiteral, type: types.TypeNode, typeMap: TypeMap) {
   if (type instanceof types.Class) {
     for (let entry of object.entries) {
       let target = type.getMember(entry.key);
-      if (!isTypeEqual(target, entry.value)) {
+      if (!isTypeEqual(target, entry.value, typeMap)) {
         throw new Error("type mismatch in object literal");
       }
     }
