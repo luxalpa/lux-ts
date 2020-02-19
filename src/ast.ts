@@ -143,8 +143,9 @@ export class RefTypeNode extends TypeNode {
   type: TypeNode;
 }
 
-export class FunctionTypeNode extends TypeNode {
-
+export class FunctionPtrTypeNode extends TypeNode {
+  params: VarDecNode[];
+  returns: TypeNode;
 }
 
 export class ProgramNode extends Node {

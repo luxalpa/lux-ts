@@ -49,7 +49,10 @@ import {
   ForExprStmtContext,
   ForVarDefStmtContext,
   AliasDecContext,
-  TypeRefContext, RefExprContext, DerefExprContext
+  TypeRefContext,
+  RefExprContext,
+  DerefExprContext,
+  TypeFunctionPtrContext
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -181,6 +184,16 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     });
   }
 
+  visitTypeFunctionPtr(ctx: TypeFunctionPtrContext): ast.FunctionPtrTypeNode {
+    return create(ast.FunctionPtrTypeNode, {
+        params: ctx
+          .fnType()
+          .fnDefParam()
+          .map(param => this.visit(param) as ast.VarDecNode),
+        returns: this.visit(ctx.fnReturnType())
+      })
+  }
+
   visitTmplParam(ctx: TmplParamContext): ast.TypeNode | ast.ExprNode {
     if (ctx.expr()) {
       return this.visit(ctx.expr());
@@ -202,13 +215,13 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   visitRefExpr(ctx: RefExprContext): ast.RefExprNode {
     return create(ast.RefExprNode, {
       expr: this.visit(ctx.expr())
-    })
+    });
   }
 
   visitDerefExpr(ctx: DerefExprContext): ast.DerefExprNode {
     return create(ast.DerefExprNode, {
       expr: this.visit(ctx.expr())
-    })
+    });
   }
 
   visitAssignStmt(ctx: AssignStmtContext): ast.AssignmentStatementNode {

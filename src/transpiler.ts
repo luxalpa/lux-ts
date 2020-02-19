@@ -213,9 +213,12 @@ export class Transpiler {
   visitRefExprNode(e: ast.RefExprNode): ESTree.Expression {
     const t = this.typemap.get(e.expr);
 
-    if(t instanceof types.Class) {
+    if(t instanceof types.Class || t instanceof types.Function) {
       return this.visit(e.expr)
     }
+
+    console.log(t)
+
     return {
       type: "ArrowFunctionExpression",
       expression: true,

@@ -21,6 +21,11 @@ export class Function implements TypeNode {
   isStatic: boolean;
 }
 
+export class FunctionPointer implements TypeNode {
+  parameters: TypeNode[];
+  returns: TypeNode | null;
+}
+
 export class Class implements TypeNode {
   constructor(
     public name: string,
@@ -121,6 +126,7 @@ export class Context {
     }
   }
 
+  // Resolves the type of type AST nodes
   getType(node: ast.TypeNode): TypeNode {
     if (node instanceof ast.PlainTypeNode) {
       return this.getTypeByString(node.name, node.templateParams);
@@ -130,6 +136,12 @@ export class Context {
       return create(RefType, {
         ref
       });
+    }
+    if (node instanceof ast.FunctionPtrTypeNode) {
+      return create(FunctionPointer, {
+        returns: this.getType(node.returns),
+        parameters: node.params.map(p => this.getType(p.type))
+      })
     }
     console.log(node);
     throw new Error("unknown TypeNode");

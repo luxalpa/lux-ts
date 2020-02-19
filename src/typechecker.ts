@@ -211,6 +211,7 @@ export class TypeChecker {
     typeMap: TypeMap
   ) {
     this.visit(n.expr, context, typeMap);
+
     typeMap.set(
       n,
       create(types.RefType, {
@@ -439,7 +440,7 @@ export function isTypeEqual(
       weak = weak.resolved;
       console.log("RARE CASE: TODO: Check this!"); // TODO
     } else {
-      resolve(weak, strong);
+      resolveObjectLiteral(weak, strong);
       return true;
     }
   }
@@ -458,13 +459,50 @@ export function isTypeEqual(
     if (!(weak instanceof types.RefType)) {
       return false;
     }
+
     return isTypeEqual(strong.ref, weak.ref);
+  }
+
+  // Function pointers
+  if(strong instanceof types.FunctionPointer) {
+    console.log("Hey")
+    if(!(weak instanceof types.RefType)) {
+      return false;
+    }
+    let fn: types.Function;
+    if(weak.ref instanceof types.OverloadedFunction) {
+      if(weak.ref.functions.length !== 1) {
+        // TODO: Resolve overloaded functions
+        throw new Error("TODO: Resolve weak type!")
+      }
+      fn = weak.ref.functions[0]
+    } else {
+      return false;
+    }
+
+    if(!isTypeEqual(strong.returns, fn.returns)) {
+      return false
+    }
+
+    if(strong.parameters.length != fn.parameters.length) {
+      return false
+    }
+
+    // TODO: Support methods (static and with receiver)
+
+    for(let i = 0; i < strong.parameters.length; i++) {
+      if(!isTypeEqual(strong.parameters[i], fn.parameters[i])) {
+        return false
+      }
+    }
+
+    return true
   }
 
   return strong === weak;
 }
 
-export function resolve(object: types.ObjectLiteral, type: types.TypeNode) {
+export function resolveObjectLiteral(object: types.ObjectLiteral, type: types.TypeNode) {
   if (type instanceof types.Class) {
     for (let entry of object.entries) {
       let target = type.getMember(entry.key);
