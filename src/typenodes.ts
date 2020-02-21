@@ -140,7 +140,7 @@ export class Context {
     if (node instanceof ast.FunctionPtrTypeNode) {
       return create(FunctionPointer, {
         returns: this.getType(node.returns),
-        parameters: node.params.map(p => this.getType(p.type))
+        parameters: node.params.map(p => this.getType(p.type!))
       })
     }
     console.log(node);
@@ -151,7 +151,7 @@ export class Context {
     name: string,
     params: (ast.TypeNode | ast.ExprNode)[] = []
   ): TypeNode {
-    let typeNode: TypeNode;
+    let typeNode: TypeNode | undefined;
     for (const ctx of this.getAllContexts()) {
       typeNode = ctx.types.get(name);
       if (typeNode) {

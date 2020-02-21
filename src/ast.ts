@@ -64,7 +64,7 @@ export class IfStatementNode extends StatementNode {
 }
 
 export class ForStatementNode extends StatementNode {
-  scope: ScopeNode;
+  scope?: ScopeNode;
 }
 
 export class ForAssignStatementNode extends ForStatementNode {
@@ -98,7 +98,7 @@ export class FunctionDecNode extends DeclarationNode {
   name: IdentifierNode;
   params: VarDecNode[];
   body?: ScopeNode;
-  returns: TypeNode;
+  returns?: TypeNode;
   tags: TagNode[];
 }
 
@@ -112,7 +112,7 @@ export class ScopeNode extends Node {
 
 export class VarDecNode extends DeclarationNode {
   left: IdentifierNode;
-  type: TypeNode;
+  type?: TypeNode;
   init?: ExprNode;
 }
 

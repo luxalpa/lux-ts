@@ -3,6 +3,7 @@ import {ANTLRInputStream, CommonTokenStream} from 'antlr4ts';
 import {LuxLexer} from "../parser-ts/LuxLexer";
 import {LuxParser} from "../parser-ts/LuxParser";
 import {ParseTreeVisitor} from "./parseTreeVisitor";
+
 import {generate} from 'astring'
 import {Transpiler} from "./transpiler";
 import * as fs from "fs"
@@ -30,7 +31,7 @@ try {
 
     console.log(code);
     (function () {
-        function log(text) {
+        function log(text: string) {
             console.log(text);
         }
 

@@ -3,7 +3,7 @@ import { InfixOperator } from "./ast";
 import * as types from "./typenodes";
 import { create } from "./util";
 import cloneDeep from "lodash.clonedeep";
-import { OverloadedFunction } from "./typenodes";
+import {Context, OverloadedFunction} from "./typenodes";
 
 type TypeMap = Map<ast.Node, types.TypeNode>;
 
@@ -21,7 +21,7 @@ export class TypeChecker {
     this.addExternals(mainCtx);
     for (let fn of typeResolver.functions) {
       if (!fn.body) {
-        let cl = fn.context.parent.owner;
+        let cl = fn.context.parent!.owner;
         if (cl instanceof types.Class) {
           cl.abstract = true;
         }
@@ -71,7 +71,7 @@ export class TypeChecker {
     if (n.constructor.name == "Object") {
       throw new Error(`Object without type: (${JSON.stringify(n)})`);
     }
-    let fn = this["visit" + n.constructor.name];
+    let fn = this["visit" + n.constructor.name as keyof TypeChecker] as (n: ast.Node, context: types.Context, typemap: TypeMap) => any;
     if (!fn) {
       throw new Error(`TypeChecker: ${n.constructor.name} is unimplemented!`);
     }
@@ -88,13 +88,13 @@ export class TypeChecker {
     if (n.type) {
       type = context.getType(n.type);
       if (n.init) {
-        let t = typemap.get(n.init);
+        let t = typemap.get(n.init)!;
         if (!isTypeEqual(type, t)) {
           throw new Error("type mismatch!");
         }
       }
     } else {
-      type = typemap.get(n.init);
+      type = typemap.get(n.init!)!;
     }
     context.addVariable(n.left.name, type);
   }
@@ -132,7 +132,7 @@ export class TypeChecker {
         }
       }
       typeMap.set(n.fn, fn); // Resolve the OverloadedFunction in the typemap
-      typeMap.set(n, fn.returns);
+      typeMap.set(n, fn.returns!);
       return;
     }
 
@@ -268,7 +268,7 @@ export class TypeChecker {
         typeMap.set(n, context.getTypeByString("Boolean"));
         break;
       default:
-        typeMap.set(n, typeMap.get(n.left));
+        typeMap.set(n, typeMap.get(n.left)!);
         break;
     }
   }
@@ -293,7 +293,7 @@ export class TypeChecker {
         );
       }
 
-      if (!isTypeEqual(fn.returns, typeMap.get(n.expr))) {
+      if (!isTypeEqual(fn.returns, typeMap.get(n.expr)!)) {
         throw "Return value doesn't match to function";
       }
     }
@@ -309,7 +309,7 @@ export class TypeChecker {
 
     for (let [key, value] of n.entries) {
       this.visit(value, context, typeMap);
-      let t = typeMap.get(value);
+      let t = typeMap.get(value)!;
       literal.entries.push(
         create(types.ObjectLiteralEntry, {
           key: key,
@@ -345,7 +345,7 @@ export class TypeChecker {
     typeMap: TypeMap
   ) {
     let ctx = context.addSubContext();
-    for (const stmt of n.scope.statements) {
+    for (const stmt of n.scope!.statements) {
       this.visit(stmt, ctx, typeMap);
     }
   }
@@ -373,7 +373,7 @@ export class TypeChecker {
     }
 
     let ctx = context.addSubContext();
-    for (const stmt of n.scope.statements) {
+    for (const stmt of n.scope!.statements) {
       // TODO: Add visitor for scope
       this.visit(stmt, ctx, typeMap);
     }
@@ -399,7 +399,7 @@ export class TypeChecker {
         // TODO: Fix for namespacing
 
         nextType = (c.getMember("next") as OverloadedFunction).functions[0]
-          .returns;
+          .returns!;
         ctx.addVariable(n.id, nextType);
         found = true;
         break;
@@ -410,12 +410,12 @@ export class TypeChecker {
     }
 
     if (n.type) {
-      if (!isTypeEqual(context.getType(n.type), nextType)) {
+      if (!isTypeEqual(context.getType(n.type), nextType!)) {
         throw new Error("For Expression type does not match requested type!");
       }
     }
 
-    for (const stmt of n.scope.statements) {
+    for (const stmt of n.scope!.statements) {
       // TODO: Add visitor for scope
       this.visit(stmt, ctx, typeMap);
     }
@@ -465,7 +465,6 @@ export function isTypeEqual(
 
   // Function pointers
   if(strong instanceof types.FunctionPointer) {
-    console.log("Hey")
     if(!(weak instanceof types.RefType)) {
       return false;
     }
@@ -480,7 +479,7 @@ export function isTypeEqual(
       return false;
     }
 
-    if(!isTypeEqual(strong.returns, fn.returns)) {
+    if(!isTypeEqual(strong.returns!, fn.returns!)) {
       return false
     }
 
@@ -600,7 +599,7 @@ class TypeResolver {
     let fnType = create(types.Function, {
       name: n.name.name,
       parameters: n.params.map(value => {
-        return context.getType(value.type);
+        return context.getType(value.type!);
       }),
       returns: n.returns ? context.getType(n.returns) : null,
       isStatic
@@ -610,7 +609,7 @@ class TypeResolver {
     this.functions.push({
       context: ctx,
       fn: fnType,
-      body: n.body
+      body: n.body!
     });
 
     if (!isStatic) {
@@ -665,7 +664,7 @@ class TypeResolver {
     if (n.constructor.name == "Object") {
       throw `Object without type: (${JSON.stringify(n)})`;
     }
-    let fn = this["visit" + n.constructor.name];
+    let fn = this["visit" + n.constructor.name as keyof TypeResolver] as (n: ast.Node, context: types.Context) => types.TypeNode;
     if (!fn) {
       throw `TypeResolver: ${n.constructor.name} is unimplemented!`;
     }

@@ -115,14 +115,14 @@ export class Transpiler {
     };
   }
 
-  visit(n: ast.Node) {
+  visit(n?: ast.Node) {
     if (!n) {
       throw new Error("visit: Node is undefined");
     }
     if (n.constructor.name == "Object") {
       throw new Error(`Object without type: (${JSON.stringify(n)})`);
     }
-    let fn = this["visit" + n.constructor.name];
+    let fn = this["visit" + n.constructor.name as keyof Transpiler] as (e: ast.Node) => any;
     if (!fn) {
       throw new Error(`Transpiler: ${n.constructor.name} is unimplemented!`);
     }
@@ -327,14 +327,14 @@ export class Transpiler {
   }
 
   visitForExprStatementNode(e: ast.ForExprStatementNode): ESTree.ForStatement {
-    return this.makeForStatement(e.scope, e.expr);
+    return this.makeForStatement(e.scope!, e.expr);
   }
 
   visitForVarDefStatementNode(
     e: ast.ForVarDefStatementNode
   ): ESTree.ForStatement {
     return this.makeForStatement(
-      e.scope,
+      e.scope!,
       e.expr,
       {
         type: "AssignmentExpression",
@@ -343,7 +343,7 @@ export class Transpiler {
           type: "Identifier",
           name: e.id
         },
-        right: undefined
+        right: undefined as unknown as ESTree.Expression
       },
       {
         type: "VariableDeclarator",
@@ -476,7 +476,7 @@ export class Transpiler {
     let obj: types.ObjectLiteral = this.typemap.get(e) as types.ObjectLiteral;
 
     let args: ESTree.Expression[] = <ESTree.Expression[]>(
-      this.classMap.get(obj.resolved).memberVars.map(dec => {
+      this.classMap.get(obj.resolved!)!.memberVars.map(dec => {
         let t = e.entries.get(dec.left.name);
         if (!t) {
           return {
@@ -492,7 +492,7 @@ export class Transpiler {
       type: "NewExpression",
       callee: {
         type: "Identifier",
-        name: obj.resolved.name
+        name: obj.resolved!.name
       },
       arguments: args
     };
@@ -511,7 +511,7 @@ export class Transpiler {
       return [];
     }
 
-    let classInfo = this.classMap.get(cl);
+    let classInfo = this.classMap.get(cl)!;
 
     for (let dec of classInfo.memberVars) {
       let { param, stmt } = createConstrAssign((<ast.VarDecNode>dec).left.name);
@@ -558,7 +558,7 @@ export class Transpiler {
     }
     let c = <types.Class>this.typemap.get(e);
     for (let inherit of c.inherits) {
-      yield* this.getAllDeclarations(this.classMap.get(inherit).astNode);
+      yield* this.getAllDeclarations(this.classMap.get(inherit)!.astNode);
     }
   }
 }
