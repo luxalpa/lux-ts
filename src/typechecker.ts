@@ -1,21 +1,26 @@
 import * as ast from "./ast";
 import { InfixOperator } from "./ast";
 import * as types from "./typenodes";
-import { create } from "./util";
+import { OverloadedFunction } from "./typenodes";
+import { create, getFromTypemap, TypeMap } from "./util";
 import cloneDeep from "lodash.clonedeep";
-import {Context, OverloadedFunction} from "./typenodes";
 
-type TypeMap = Map<ast.Node, types.TypeNode>;
+export interface FunctionOverloadInfo {
+  fns: types.Function[];
+  name: string;
+}
 
 export class TypeChecker {
-  // Contains all the resolved classes for the Transpiler to generate.
-  usedClasses: ast.ClassDecNode[];
-
   constructor(private tree: ast.ProgramNode) {}
 
-  check(): TypeMap {
-    let typeMap = new Map<ast.Node, types.TypeNode>();
-    let typeResolver = new TypeResolver(this.tree, typeMap);
+  check(): {
+    typemap: TypeMap;
+    // Contains all the resolved classes for the Transpiler to generate.
+    usedClasses: ast.ClassDecNode[];
+    fnOverloadInfos: FunctionOverloadInfo[];
+  } {
+    let typemap = new Map<ast.Node, types.TypeNode>();
+    let typeResolver = new TypeResolver(this.tree, typemap);
     let mainCtx = typeResolver.check();
 
     this.addExternals(mainCtx);
@@ -27,19 +32,42 @@ export class TypeChecker {
         }
       } else {
         for (let stmt of fn.body.statements) {
-          this.visit(stmt, fn.context, typeMap);
+          this.visit(stmt, fn.context, typemap);
         }
       }
     }
 
-    this.usedClasses = typeResolver.usedClasses;
-
-    return typeMap;
+    return {
+      typemap,
+      usedClasses: typeResolver.usedClasses,
+      fnOverloadInfos: findOverloadedFunctions(typemap, this.tree)
+    };
   }
 
   addExternals(context: types.Context) {
-    let cc = new types.Context();
-    cc.addVariable(
+    // let cc = new types.Context();
+    // cc.addVariable(
+    //   "log",
+    //   create(types.Function, {
+    //     name: "log",
+    //     parameters: [context.getTypeByString("Integer")],
+    //     isStatic: false,
+    //     returns: null
+    //   })
+    // );
+    // cc.addVariable(
+    //   "log",
+    //   create(types.Function, {
+    //     name: "log",
+    //     parameters: [context.getTypeByString("Boolean")],
+    //     isStatic: false,
+    //     returns: null
+    //   })
+    // );
+    //
+    // context.addVariable("console", new types.Class("console", cc));
+
+    context.addVariable(
       "log",
       create(types.Function, {
         name: "log",
@@ -48,7 +76,7 @@ export class TypeChecker {
         returns: null
       })
     );
-    cc.addVariable(
+    context.addVariable(
       "log",
       create(types.Function, {
         name: "log",
@@ -58,24 +86,26 @@ export class TypeChecker {
       })
     );
 
-    context.addVariable("console", new types.Class("console", cc));
-
     context.addVariable("false", context.getTypeByString("Boolean"));
     context.addVariable("true", context.getTypeByString("Boolean"));
   }
 
-  visit(n: ast.Node, context: types.Context, typeMap: TypeMap) {
+  visit(n: ast.Node, context: types.Context, typemap: TypeMap) {
     if (!n) {
       throw new Error("visit: Node to visit is undefined");
     }
     if (n.constructor.name == "Object") {
       throw new Error(`Object without type: (${JSON.stringify(n)})`);
     }
-    let fn = this["visit" + n.constructor.name as keyof TypeChecker] as (n: ast.Node, context: types.Context, typemap: TypeMap) => any;
+    let fn = this[("visit" + n.constructor.name) as keyof TypeChecker] as (
+      n: ast.Node,
+      context: types.Context,
+      typemap: TypeMap
+    ) => any;
     if (!fn) {
       throw new Error(`TypeChecker: ${n.constructor.name} is unimplemented!`);
     }
-    return fn.call(this, n, context, typeMap);
+    return fn.call(this, n, context, typemap);
   }
 
   visitVarDecNode(n: ast.VarDecNode, context: types.Context, typemap: TypeMap) {
@@ -88,13 +118,13 @@ export class TypeChecker {
     if (n.type) {
       type = context.getType(n.type);
       if (n.init) {
-        let t = typemap.get(n.init)!;
+        let t = getFromTypemap(typemap, n.init)!;
         if (!isTypeEqual(type, t)) {
           throw new Error("type mismatch!");
         }
       }
     } else {
-      type = typemap.get(n.init!)!;
+      type = getFromTypemap(typemap, n.init!)!;
     }
     context.addVariable(n.left.name, type);
   }
@@ -102,37 +132,41 @@ export class TypeChecker {
   visitFunctionCallStmtNode(
     n: ast.FunctionCallStmtNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.fnCall, context, typeMap);
+    this.visit(n.fnCall, context, typemap);
   }
 
   visitFunctionCallExprNode(
     n: ast.FunctionCallExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.fn, context, typeMap);
-    const overloadedFns = typeMap.get(n.fn);
+    this.visit(n.fn, context, typemap);
+    const resolvableType = typemap.get(n.fn)!;
+    if (!(resolvableType instanceof types.ResolvableType)) {
+      console.error(resolvableType);
+      throw new Error("Did not find Resolvable");
+    }
+    const overloadedFns = resolvableType.resolved;
     if (!(overloadedFns instanceof types.OverloadedFunction)) {
-      throw new Error(
-        "Function Call on non-function: " + JSON.stringify(overloadedFns)
-      );
+      console.error(overloadedFns);
+      throw new Error("Function Call on non-function");
     }
     n.params.forEach(value => {
-      this.visit(value, context, typeMap);
+      this.visit(value, context, typemap);
     });
     outerLoop: for (const fn of overloadedFns.functions) {
       if (fn.parameters.length !== n.params.length) {
         continue;
       }
       for (const [i, param] of fn.parameters.entries()) {
-        if (param !== typeMap.get(n.params[i])) {
+        if (param !== getFromTypemap(typemap, n.params[i])) {
           continue outerLoop;
         }
       }
-      typeMap.set(n.fn, fn); // Resolve the OverloadedFunction in the typemap
-      typeMap.set(n, fn.returns!);
+      typemap.set(n, fn.returns!);
+      resolvableType.resolved = fn;
       return;
     }
 
@@ -142,10 +176,10 @@ export class TypeChecker {
   visitMemberExprNode(
     n: ast.MemberExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.object, context, typeMap);
-    let t: types.TypeNode = typeMap.get(n.object) as types.Class;
+    this.visit(n.object, context, typemap);
+    let t: types.TypeNode = getFromTypemap(typemap, n.object) as types.Class;
     if (t.constructor !== types.Class) {
       if (t.constructor === types.MetaType) {
         let v = (t as types.MetaType).type;
@@ -155,7 +189,7 @@ export class TypeChecker {
             if (!e.members.includes(n.property)) {
               throw `Property ${n.property} not found on Enum ${e.name}`;
             }
-            typeMap.set(n, e);
+            typemap.set(n, e);
             return;
           }
           case types.Class: {
@@ -173,11 +207,13 @@ export class TypeChecker {
               throw new Error("Need a static function!");
             }
 
-            typeMap.set(
+            typemap.set(
               n,
-              create(types.OverloadedFunction, {
-                functions: staticFns
-              })
+              new types.ResolvableType(
+                create(types.OverloadedFunction, {
+                  functions: staticFns
+                })
+              )
             );
             return;
           }
@@ -192,30 +228,30 @@ export class TypeChecker {
       }
     } else {
       let v = (t as types.Class).getMember(n.property);
-      typeMap.set(n, v);
+      typemap.set(n, v);
     }
   }
 
   visitIdentifierExprNode(
     n: ast.IdentifierExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
     let v = context.getVariable(n.id.name);
-    typeMap.set(n, v);
+    typemap.set(n, v);
   }
 
   visitRefExprNode(
     n: ast.RefExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.expr, context, typeMap);
+    this.visit(n.expr, context, typemap);
 
-    typeMap.set(
+    typemap.set(
       n,
       create(types.RefType, {
-        ref: typeMap.get(n.expr)
+        ref: getFromTypemap(typemap, n.expr)
       })
     );
   }
@@ -223,30 +259,30 @@ export class TypeChecker {
   visitDerefExprNode(
     n: ast.RefExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.expr, context, typeMap);
-    const t = typeMap.get(n.expr);
+    this.visit(n.expr, context, typemap);
+    const t = getFromTypemap(typemap, n.expr);
 
     if (!(t instanceof types.RefType)) {
       throw new Error("Can only dereference pointers");
     }
 
-    typeMap.set(n, t.ref);
+    typemap.set(n, t.ref);
   }
 
-  visitNumberNode(n: ast.NumberNode, context: types.Context, typeMap: TypeMap) {
-    typeMap.set(n, context.getTypeByString("Integer"));
+  visitNumberNode(n: ast.NumberNode, context: types.Context, typemap: TypeMap) {
+    typemap.set(n, context.getTypeByString("Integer"));
   }
 
   visitAssignmentStatementNode(
     n: ast.AssignmentStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.right, context, typeMap);
-    this.visit(n.left, context, typeMap);
-    if (typeMap.get(n.left) !== typeMap.get(n.right)) {
+    this.visit(n.right, context, typemap);
+    this.visit(n.left, context, typemap);
+    if (getFromTypemap(typemap, n.left) !== getFromTypemap(typemap, n.right)) {
       throw "Can't assign these values";
     }
   }
@@ -254,21 +290,21 @@ export class TypeChecker {
   visitInfixExprNode(
     n: ast.InfixExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.left, context, typeMap);
-    this.visit(n.right, context, typeMap);
-    if (typeMap.get(n.left) !== typeMap.get(n.right)) {
+    this.visit(n.left, context, typemap);
+    this.visit(n.right, context, typemap);
+    if (getFromTypemap(typemap, n.left) !== getFromTypemap(typemap, n.right)) {
       throw "Left and right value have different type";
     }
 
     switch (n.operator) {
       case InfixOperator.Equals:
       case InfixOperator.Unequals:
-        typeMap.set(n, context.getTypeByString("Boolean"));
+        typemap.set(n, context.getTypeByString("Boolean"));
         break;
       default:
-        typeMap.set(n, typeMap.get(n.left)!);
+        typemap.set(n, getFromTypemap(typemap, n.left)!);
         break;
     }
   }
@@ -276,7 +312,7 @@ export class TypeChecker {
   visitReturnStatementNode(
     n: ast.ReturnStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
     const fn = <types.Function>context.owner;
     if (!n.expr) {
@@ -286,14 +322,14 @@ export class TypeChecker {
         );
       }
     } else {
-      this.visit(n.expr, context, typeMap);
+      this.visit(n.expr, context, typemap);
       if (!fn.returns) {
         throw new Error(
           `Function should not return a value, but got (${n.expr.constructor.name})`
         );
       }
 
-      if (!isTypeEqual(fn.returns, typeMap.get(n.expr)!)) {
+      if (!isTypeEqual(fn.returns, getFromTypemap(typemap, n.expr)!)) {
         throw "Return value doesn't match to function";
       }
     }
@@ -302,14 +338,14 @@ export class TypeChecker {
   visitObjectLiteralExprNode(
     n: ast.ObjectLiteralExprNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
     let literal = new types.ObjectLiteral();
     literal.entries = [];
 
     for (let [key, value] of n.entries) {
-      this.visit(value, context, typeMap);
-      let t = typeMap.get(value)!;
+      this.visit(value, context, typemap);
+      let t = getFromTypemap(typemap, value)!;
       literal.entries.push(
         create(types.ObjectLiteralEntry, {
           key: key,
@@ -318,45 +354,45 @@ export class TypeChecker {
       );
     }
 
-    typeMap.set(n, literal);
+    typemap.set(n, literal);
   }
 
   visitIfStatementNode(
     n: ast.IfStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.condition, context, typeMap);
+    this.visit(n.condition, context, typemap);
     if (
-      typeMap.get(n.condition) !==
+      getFromTypemap(typemap, n.condition) !==
       (context.getTypeByString("Boolean") as types.TypeNode)
     ) {
       throw new Error("If condition must be boolean!");
     }
     let ctx = context.addSubContext();
     for (const stmt of n.scope.statements) {
-      this.visit(stmt, ctx, typeMap);
+      this.visit(stmt, ctx, typemap);
     }
   }
 
   visitForStatementNode(
     n: ast.ForStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
     let ctx = context.addSubContext();
     for (const stmt of n.scope!.statements) {
-      this.visit(stmt, ctx, typeMap);
+      this.visit(stmt, ctx, typemap);
     }
   }
 
   visitForExprStatementNode(
     n: ast.ForExprStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.expr, context, typeMap);
-    const t = typeMap.get(n.expr);
+    this.visit(n.expr, context, typemap);
+    const t = getFromTypemap(typemap, n.expr);
     if (!(t instanceof types.Class)) {
       throw new Error("For Expression needs to be a Class!");
     }
@@ -375,20 +411,20 @@ export class TypeChecker {
     let ctx = context.addSubContext();
     for (const stmt of n.scope!.statements) {
       // TODO: Add visitor for scope
-      this.visit(stmt, ctx, typeMap);
+      this.visit(stmt, ctx, typemap);
     }
   }
 
   visitForVarDefStatementNode(
     n: ast.ForVarDefStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
-    this.visit(n.expr, context, typeMap);
+    this.visit(n.expr, context, typemap);
     let ctx = context.addSubContext();
 
     // Resolve the Iterators type
-    const t = typeMap.get(n.expr);
+    const t = getFromTypemap(typemap, n.expr);
     if (!(t instanceof types.Class)) {
       throw new Error("For Expression needs to be a Class!");
     }
@@ -417,14 +453,14 @@ export class TypeChecker {
 
     for (const stmt of n.scope!.statements) {
       // TODO: Add visitor for scope
-      this.visit(stmt, ctx, typeMap);
+      this.visit(stmt, ctx, typemap);
     }
   }
 
   visitBreakStatementNode(
     n: ast.BreakStatementNode,
     context: types.Context,
-    typeMap: TypeMap
+    typemap: TypeMap
   ) {
     // Intentionally left blank.
   }
@@ -464,44 +500,77 @@ export function isTypeEqual(
   }
 
   // Function pointers
-  if(strong instanceof types.FunctionPointer) {
-    if(!(weak instanceof types.RefType)) {
+  if (strong instanceof types.FunctionPointer) {
+    if (!(weak instanceof types.RefType)) {
       return false;
     }
     let fn: types.Function;
-    if(weak.ref instanceof types.OverloadedFunction) {
-      if(weak.ref.functions.length !== 1) {
+    if (weak.ref instanceof types.OverloadedFunction) {
+      if (weak.ref.functions.length !== 1) {
         // TODO: Resolve overloaded functions
-        throw new Error("TODO: Resolve weak type!")
+        throw new Error("TODO: Resolve weak type!");
       }
-      fn = weak.ref.functions[0]
+      fn = weak.ref.functions[0];
     } else {
       return false;
     }
 
-    if(!isTypeEqual(strong.returns!, fn.returns!)) {
-      return false
+    if (!isTypeEqual(strong.returns!, fn.returns!)) {
+      return false;
     }
 
-    if(strong.parameters.length != fn.parameters.length) {
-      return false
+    if (strong.parameters.length != fn.parameters.length) {
+      return false;
     }
 
     // TODO: Support methods (static and with receiver)
 
-    for(let i = 0; i < strong.parameters.length; i++) {
-      if(!isTypeEqual(strong.parameters[i], fn.parameters[i])) {
-        return false
+    for (let i = 0; i < strong.parameters.length; i++) {
+      if (!isTypeEqual(strong.parameters[i], fn.parameters[i])) {
+        return false;
       }
     }
 
-    return true
+    return true;
   }
 
   return strong === weak;
 }
 
-export function resolveObjectLiteral(object: types.ObjectLiteral, type: types.TypeNode) {
+// export function findAllOverloadedFunctions(
+//   mainContext: types.Context
+// ): FunctionOverloadInfo[] {
+//   const infos: FunctionOverloadInfo[] = [];
+//   for (const ctx of mainContext.getAllContexts()) {
+//     const m = new Map<string, types.Function[]>();
+//     for (const v of ctx.variables) {
+//       if (!(v.type instanceof types.Function)) {
+//         continue;
+//       }
+//
+//       const symbol = m.get(v.name);
+//
+//       if (symbol === undefined) {
+//         m.set(v.name, [v.type]);
+//       } else {
+//         if (symbol.length == 1) {
+//           // Every element that we found more than once should eventually be returned as info.
+//           infos.push({
+//             name: v.name,
+//             fns: symbol
+//           });
+//         }
+//         symbol.push(v.type);
+//       }
+//     }
+//   }
+//   return infos;
+// }
+
+export function resolveObjectLiteral(
+  object: types.ObjectLiteral,
+  type: types.TypeNode
+) {
   if (type instanceof types.Class) {
     for (let entry of object.entries) {
       let target = type.getMember(entry.key);
@@ -517,6 +586,28 @@ export function resolveObjectLiteral(object: types.ObjectLiteral, type: types.Ty
         type.constructor.name
     );
   }
+}
+
+function findOverloadedFunctions(typemap: TypeMap, tree: ast.ProgramNode): FunctionOverloadInfo[] {
+  const globalFunctions = new Map<string, types.Function[]>()
+  for(const dec of tree.declarations) {
+    if(!(dec instanceof ast.FunctionDecNode)) {
+      continue
+    }
+
+    let fns = globalFunctions.get(dec.name.name);
+    if(!fns) {
+      fns = []
+      globalFunctions.set(dec.name.name, fns)
+    }
+
+    fns.push(getFromTypemap(typemap, dec) as types.Function)
+  }
+
+  return [...globalFunctions].filter(([, arr]) => arr.length > 1).map(([name, fns]) => ({
+    name,
+    fns
+  }))
 }
 
 interface FunctionCheck {
@@ -664,7 +755,10 @@ class TypeResolver {
     if (n.constructor.name == "Object") {
       throw `Object without type: (${JSON.stringify(n)})`;
     }
-    let fn = this["visit" + n.constructor.name as keyof TypeResolver] as (n: ast.Node, context: types.Context) => types.TypeNode;
+    let fn = this[("visit" + n.constructor.name) as keyof TypeResolver] as (
+      n: ast.Node,
+      context: types.Context
+    ) => types.TypeNode;
     if (!fn) {
       throw `TypeResolver: ${n.constructor.name} is unimplemented!`;
     }

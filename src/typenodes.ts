@@ -91,6 +91,11 @@ export class RefType implements TypeNode {
   ref: TypeNode;
 }
 
+export class ResolvableType implements TypeNode {
+  constructor(public resolved: TypeNode) {
+  }
+}
+
 interface ContextSymbol {
   name: string;
   type: TypeNode;
@@ -141,7 +146,7 @@ export class Context {
       return create(FunctionPointer, {
         returns: this.getType(node.returns),
         parameters: node.params.map(p => this.getType(p.type!))
-      })
+      });
     }
     console.log(node);
     throw new Error("unknown TypeNode");
@@ -243,8 +248,10 @@ export class Context {
     }
 
     if (fns.length > 0) {
-      return create(OverloadedFunction, {
-        functions: fns
+      return create(ResolvableType, {
+        resolved: create(OverloadedFunction, {
+          functions: fns
+        })
       });
     }
 

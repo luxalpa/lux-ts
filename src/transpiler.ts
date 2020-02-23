@@ -2,7 +2,8 @@ import * as ast from "./ast";
 import { InfixOperator } from "./ast";
 import * as ESTree from "estree";
 import * as types from "./typenodes";
-import { create } from "./util";
+import { create, getFromTypemap } from "./util";
+import { FunctionOverloadInfo } from "./typechecker";
 
 class ClassInfo {
   astNode: ast.ClassDecNode;
@@ -12,12 +13,15 @@ class ClassInfo {
 
 export class Transpiler {
   classMap: Map<types.Class, ClassInfo>;
+  functionNameMap: Map<types.Function, string>;
 
   constructor(
     private typemap: Map<ast.Node, types.TypeNode>,
-    private usedClasses: ast.ClassDecNode[]
+    private usedClasses: ast.ClassDecNode[],
+    fnOverloads: FunctionOverloadInfo[]
   ) {
     this.buildClassMap();
+    this.functionNameMap = buildFunctionOverloadMap(fnOverloads);
   }
 
   buildClassMap() {
@@ -30,7 +34,10 @@ export class Transpiler {
         methods: []
       });
 
-      this.classMap.set(this.typemap.get(dec) as types.Class, classInfo);
+      this.classMap.set(
+        getFromTypemap(this.typemap, dec) as types.Class,
+        classInfo
+      );
     }
 
     for (let classInfo of this.classMap.values()) {
@@ -41,7 +48,7 @@ export class Transpiler {
           classInfo.memberVars.push(dec);
         } else if (dec instanceof ast.FunctionDecNode) {
           let d = <ast.FunctionDecNode>dec;
-          let fnType = this.typemap.get(d) as types.Function;
+          let fnType = getFromTypemap(this.typemap, d) as types.Function;
 
           let idx = processedFunctions.findIndex(fn => {
             if (
@@ -122,7 +129,9 @@ export class Transpiler {
     if (n.constructor.name == "Object") {
       throw new Error(`Object without type: (${JSON.stringify(n)})`);
     }
-    let fn = this["visit" + n.constructor.name as keyof Transpiler] as (e: ast.Node) => any;
+    let fn = this[("visit" + n.constructor.name) as keyof Transpiler] as (
+      e: ast.Node
+    ) => any;
     if (!fn) {
       throw new Error(`Transpiler: ${n.constructor.name} is unimplemented!`);
     }
@@ -147,16 +156,20 @@ export class Transpiler {
   }
 
   visitFunctionDecNode(e: ast.FunctionDecNode): ESTree.FunctionDeclaration {
+    const fn = getFromTypemap(this.typemap, e) as types.Function;
+    const name = this.functionNameMap.get(fn) || e.name.name;
+
     return {
       type: "FunctionDeclaration",
-      id: this.visit(e.name),
+      id: {
+        type: "Identifier",
+        name
+      },
       body: this.visit(e.body),
-      params: e.params.map(param => {
-        return <ESTree.Identifier>{
-          type: "Identifier",
-          name: param.left.name
-        };
-      })
+      params: e.params.map(param => ({
+        type: "Identifier",
+        name: param.left.name
+      }))
     };
   }
 
@@ -164,12 +177,10 @@ export class Transpiler {
     return {
       type: "FunctionExpression",
       body: this.visit(e.body),
-      params: e.params.map(param => {
-        return <ESTree.Identifier>{
-          type: "Identifier",
-          name: param.left.name
-        };
-      })
+      params: e.params.map(param => ({
+        type: "Identifier",
+        name: param.left.name
+      }))
     };
   }
 
@@ -207,36 +218,44 @@ export class Transpiler {
   }
 
   visitIdentifierExprNode(e: ast.IdentifierExprNode): ESTree.Identifier {
+    const fn = getFromTypemap(this.typemap, e);
+    if (fn instanceof types.Function) {
+      return {
+        type: "Identifier",
+        name: this.functionNameMap.get(fn) || e.id.name
+      };
+    }
+    console.log();
     return this.visit(e.id);
   }
 
   visitRefExprNode(e: ast.RefExprNode): ESTree.Expression {
-    const t = this.typemap.get(e.expr);
+    const t = getFromTypemap(this.typemap, e.expr);
 
-    if(t instanceof types.Class || t instanceof types.Function) {
-      return this.visit(e.expr)
+    if (t instanceof types.Class || t instanceof types.Function) {
+      return this.visit(e.expr);
     }
 
-    console.log(t)
+    console.log(t);
 
     return {
       type: "ArrowFunctionExpression",
       expression: true,
       body: this.visit(e.expr),
       params: []
-    }
+    };
   }
 
   visitDerefExprNode(e: ast.DerefExprNode): ESTree.Expression {
-    const t = this.typemap.get(e);
-    if(t instanceof types.Class) {
-      return this.visit(e.expr)
+    const t = getFromTypemap(this.typemap, e);
+    if (t instanceof types.Class) {
+      return this.visit(e.expr);
     }
     return {
       type: "CallExpression",
       callee: this.visit(e.expr),
       arguments: []
-    }
+    };
   }
 
   visitFunctionCallExprNode(
@@ -343,7 +362,7 @@ export class Transpiler {
           type: "Identifier",
           name: e.id
         },
-        right: undefined as unknown as ESTree.Expression
+        right: (undefined as unknown) as ESTree.Expression
       },
       {
         type: "VariableDeclarator",
@@ -473,7 +492,10 @@ export class Transpiler {
   visitObjectLiteralExprNode(
     e: ast.ObjectLiteralExprNode
   ): ESTree.NewExpression {
-    let obj: types.ObjectLiteral = this.typemap.get(e) as types.ObjectLiteral;
+    let obj: types.ObjectLiteral = getFromTypemap(
+      this.typemap,
+      e
+    ) as types.ObjectLiteral;
 
     let args: ESTree.Expression[] = <ESTree.Expression[]>(
       this.classMap.get(obj.resolved!)!.memberVars.map(dec => {
@@ -505,7 +527,7 @@ export class Transpiler {
 
     let processedFunctions: types.Function[] = [];
 
-    let cl = this.typemap.get(e) as types.Class;
+    let cl = getFromTypemap(this.typemap, e) as types.Class;
 
     if (cl.abstract) {
       return [];
@@ -526,7 +548,7 @@ export class Transpiler {
         );
       }
       let fn = this.makeFunctionExpression(dec);
-      let fnType = this.typemap.get(dec) as types.Function;
+      let fnType = getFromTypemap(this.typemap, dec) as types.Function;
       let st = createConstrFn(
         e.name.name,
         fnType.isStatic,
@@ -556,7 +578,7 @@ export class Transpiler {
     for (let dec of e.declarations) {
       yield dec;
     }
-    let c = <types.Class>this.typemap.get(e);
+    let c = <types.Class>getFromTypemap(this.typemap, e);
     for (let inherit of c.inherits) {
       yield* this.getAllDeclarations(this.classMap.get(inherit)!.astNode);
     }
@@ -630,4 +652,18 @@ function createConstrAssign(
     }
   };
   return { param, stmt };
+}
+
+function buildFunctionOverloadMap(
+  infos: FunctionOverloadInfo[]
+): Map<types.Function, string> {
+  const m = new Map<types.Function, string>();
+
+  for (const info of infos) {
+    for (let i = 0; i < info.fns.length; i++) {
+      m.set(info.fns[i], info.name + "$" + i);
+    }
+  }
+
+  return m;
 }
