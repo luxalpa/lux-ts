@@ -3,3 +3,8 @@ node_modules
 .yarn/unplugged
 .yarn/build-state.yml
 .pnp.*
+*.interp
+*.tokens
+parser-ts/LuxLexer.ts
+parser-ts/LuxParser.ts
+parser-ts/LuxParserVisitor.ts

@@ -50,7 +50,7 @@ declaration
     ;
 
 typeDef
-    : ID tmplDefParamList? ':' fnDef               # funcDec
+    : 'function' ID tmplDefParamList? fnDef        # funcDec
     | ID tmplDefParamList? ':' 'enum' enumScope    # enumDec
     | ID tmplDefParamList? ':' 'class' classScope  # classDec
     | ID tmplDefParamList? ':' 'alias' vtype       # aliasDec

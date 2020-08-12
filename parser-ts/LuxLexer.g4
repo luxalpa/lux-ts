@@ -79,6 +79,7 @@ MATCH: 'match';
 ENUM: 'enum';
 INHERIT: 'inherit';
 ALIAS: 'alias';
+FUNCTION: 'function';
 
 STRING
    : '"' (ESC | ~ ["\\])* '"'
