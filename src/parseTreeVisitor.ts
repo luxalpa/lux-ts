@@ -186,12 +186,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
   visitTypeFunctionPtr(ctx: TypeFunctionPtrContext): ast.FunctionPtrTypeNode {
     return create(ast.FunctionPtrTypeNode, {
-        params: ctx
-          .fnType()
-          .fnDefParam()
-          .map(param => this.visit(param) as ast.VarDecNode),
-        returns: this.visit(ctx.fnReturnType())
-      })
+      params: ctx
+        .fnType()
+        .fnDefParam()
+        .map(param => this.visit(param) as ast.VarDecNode),
+      returns: this.visit(ctx.fnReturnType())
+    });
   }
 
   visitTmplParam(ctx: TmplParamContext): ast.TypeNode | ast.ExprNode {
@@ -426,7 +426,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.ForVarDefStatementNode, {
       expr: this.visit(ctx.expr()),
       id: ctx.ID().text,
-      type: ctx.vtype() ? (this.visit(ctx.vtype()!) as ast.TypeNode) : undefined,
+      type: ctx.vtype()
+        ? (this.visit(ctx.vtype()!) as ast.TypeNode)
+        : undefined,
       scope: undefined
     });
   }

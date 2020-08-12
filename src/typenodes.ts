@@ -92,8 +92,7 @@ export class RefType implements TypeNode {
 }
 
 export class ResolvableType implements TypeNode {
-  constructor(public resolved: TypeNode) {
-  }
+  constructor(public resolved: TypeNode) {}
 }
 
 interface ContextSymbol {

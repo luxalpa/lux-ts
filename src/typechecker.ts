@@ -588,26 +588,31 @@ export function resolveObjectLiteral(
   }
 }
 
-function findOverloadedFunctions(typemap: TypeMap, tree: ast.ProgramNode): FunctionOverloadInfo[] {
-  const globalFunctions = new Map<string, types.Function[]>()
-  for(const dec of tree.declarations) {
-    if(!(dec instanceof ast.FunctionDecNode)) {
-      continue
+function findOverloadedFunctions(
+  typemap: TypeMap,
+  tree: ast.ProgramNode
+): FunctionOverloadInfo[] {
+  const globalFunctions = new Map<string, types.Function[]>();
+  for (const dec of tree.declarations) {
+    if (!(dec instanceof ast.FunctionDecNode)) {
+      continue;
     }
 
     let fns = globalFunctions.get(dec.name.name);
-    if(!fns) {
-      fns = []
-      globalFunctions.set(dec.name.name, fns)
+    if (!fns) {
+      fns = [];
+      globalFunctions.set(dec.name.name, fns);
     }
 
-    fns.push(getFromTypemap(typemap, dec) as types.Function)
+    fns.push(getFromTypemap(typemap, dec) as types.Function);
   }
 
-  return [...globalFunctions].filter(([, arr]) => arr.length > 1).map(([name, fns]) => ({
-    name,
-    fns
-  }))
+  return [...globalFunctions]
+    .filter(([, arr]) => arr.length > 1)
+    .map(([name, fns]) => ({
+      name,
+      fns
+    }));
 }
 
 interface FunctionCheck {
