@@ -1,6 +1,6 @@
 import * as ast from "./ast";
 import { create } from "./util";
-import { AliasFactory, ClassFactory } from "./typechecker";
+import { AliasFactory, StructFactory } from "./typechecker";
 
 export interface TypeNode {}
 
@@ -26,21 +26,31 @@ export class FunctionPointer implements TypeNode {
   returns: TypeNode | null;
 }
 
-export class Class implements TypeNode {
-  constructor(
-    public name: string,
-    public members: Context,
-    public inherits: Class[] = [],
-    public abstract: boolean = false
-  ) {}
+export class Trait {
+  constructor(public name: string) {}
+}
+
+export const NoTrait = new Trait("");
+
+export class Struct implements TypeNode {
+  methods = new Map<Trait, Function[]>();
+  constructor(public name: string, public fields: Context) {}
+
+  addMethod(trait: Trait, fn: Function) {
+    const fns = this.methods.get(trait);
+    if (!fns) {
+      this.methods.set(trait, [fn]);
+    } else {
+      fns.push(fn);
+    }
+  }
 
   getMember(name: string): TypeNode {
     let fns: Function[] = [];
-    for (const c of this.allParentClasses()) {
-      const member = c.members.getMember(name);
-      if (member instanceof OverloadedFunction) {
-        fns.push(...member.functions);
-      } else if (member) {
+    for (const member of this.allMembers()) {
+      if (member instanceof Function) {
+        fns.push(member);
+      } else {
         return member;
       }
     }
@@ -49,14 +59,27 @@ export class Class implements TypeNode {
         functions: fns
       });
     }
-    throw new Error(`Member ${name} not found on class ${this.name}`);
+    throw new Error(`Member ${name} not found on struct ${this.name}`);
   }
 
-  *allParentClasses(): IterableIterator<Class> {
-    yield this;
-    for (let parent of this.inherits) {
-      yield* parent.allParentClasses();
+  *allMembers(): IterableIterator<TypeNode> {
+    for (const [trait, methods] of this.methods) {
+      for (const method of methods) {
+        yield method;
+      }
     }
+    for (let field of this.fields.variables) {
+      yield field;
+    }
+  }
+
+  implementedTraits(): Trait[] {
+    // TODO: We need to actually check that all trait methods are implemented, not just some of them
+    const set = new Set<Trait>();
+    for (const [trait, methods] of this.methods) {
+      set.add(trait);
+    }
+    return [...set];
   }
 }
 
@@ -74,7 +97,7 @@ export class SemiInferred implements TypeNode {
 
 export class ObjectLiteral implements TypeNode {
   entries: ObjectLiteralEntry[];
-  resolved?: Class;
+  type: Struct;
 }
 
 export class ObjectLiteralEntry {
@@ -104,7 +127,7 @@ export class Context {
   parent?: Context;
   types: Map<string, TypeNode>;
   variables: ContextSymbol[];
-  owner: Function | Class;
+  owner: Function | Struct;
 
   constructor(parent?: Context) {
     this.types = new Map<string, TypeNode>();
@@ -167,7 +190,7 @@ export class Context {
       throw new Error(`Type "${name}" not found`);
     }
 
-    if (typeNode instanceof ClassFactory || typeNode instanceof AliasFactory) {
+    if (typeNode instanceof StructFactory || typeNode instanceof AliasFactory) {
       const templateParams = params.map(param => {
         if (param instanceof ast.ExprNode) {
           throw new Error("Expression Templates not yet supported!");
@@ -178,7 +201,7 @@ export class Context {
 
       return typeNode.resolve(templateParams);
     } else if (params && params.length > 0) {
-      throw new Error("Can't have Template Parameters on non-class type");
+      throw new Error("Can't have Template Parameters on non-struct type");
     }
 
     return typeNode;
@@ -224,8 +247,8 @@ export class Context {
   getVariable(name: string): TypeNode {
     let fns: Function[] = [];
     for (const ctx of this.getAllContexts()) {
-      if (ctx.owner instanceof Class) {
-        // Skip class members. They can only be used explicitly using getMember
+      if (ctx.owner instanceof Struct) {
+        // Skip struct members. They can only be used explicitly using getMember
         continue;
       }
       for (const v of ctx.variables) {
@@ -239,7 +262,7 @@ export class Context {
 
       const type = ctx.types.get(name);
       if (type) {
-        if (type instanceof ClassFactory) {
+        if (type instanceof StructFactory) {
           return new MetaType(type.resolve([])); // Todo: Implement this for static generic types
         }
         return new MetaType(type);

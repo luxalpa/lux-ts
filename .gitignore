@@ -8,3 +8,4 @@ node_modules
 parser-ts/LuxLexer.ts
 parser-ts/LuxParser.ts
 parser-ts/LuxParserVisitor.ts
+gen/

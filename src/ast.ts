@@ -39,6 +39,16 @@ export class ObjectLiteralExprNode extends ExprNode {
   entries: Map<string, ExprNode>;
 }
 
+export class ObjectConstructionExprNode extends ExprNode {
+  type: PlainTypeNode;
+  entries: Map<string, ExprNode>;
+}
+
+export class BehaviorNode extends Node {
+  type: PlainTypeNode;
+  functions: FunctionDecNode[];
+}
+
 export class RefExprNode extends ExprNode {
   expr: ExprNode;
 }
@@ -121,7 +131,7 @@ export class EnumDecNode extends DeclarationNode {
   entries: EnumEntryNode[];
 }
 
-export class ClassDecNode extends DeclarationNode {
+export class StructDecNode extends DeclarationNode {
   name: IdentifierNode;
   declarations: DeclarationNode[];
   templateParams: VarDecNode[];

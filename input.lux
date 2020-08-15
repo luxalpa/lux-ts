@@ -1,12 +1,25 @@
-main: () => {
-    myFn(10)
+
+struct MyStruct {
+    age: Integer
 }
 
-myFn: (x: Integer) => {
+behavior MyStruct {
+    run() => Void {
+        log(this.age)
+    }
+}
+
+function main() => {
+    myFn(10)
+    obj := <MyStruct age=255 />
+    log(obj.age)
+}
+
+function myFn(x: Integer) => {
     log(10)
 }
 
-myFn: (x: Boolean) => {
+function myFn(x: Boolean) => {
     log(5)
 }
 

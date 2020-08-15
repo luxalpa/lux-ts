@@ -1,7 +1,5 @@
 import * as ast from "./ast";
-import { InfixOperator } from "./ast";
 import * as types from "./typenodes";
-import { OverloadedFunction } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import cloneDeep from "lodash.clonedeep";
 
@@ -16,7 +14,7 @@ export class TypeChecker {
   check(): {
     typemap: TypeMap;
     // Contains all the resolved classes for the Transpiler to generate.
-    usedClasses: ast.ClassDecNode[];
+    usedClasses: ast.StructDecNode[];
     fnOverloadInfos: FunctionOverloadInfo[];
   } {
     let typemap = new Map<ast.Node, types.TypeNode>();
@@ -25,21 +23,14 @@ export class TypeChecker {
 
     this.addExternals(mainCtx);
     for (let fn of typeResolver.functions) {
-      if (!fn.body) {
-        let cl = fn.context.parent!.owner;
-        if (cl instanceof types.Class) {
-          cl.abstract = true;
-        }
-      } else {
-        for (let stmt of fn.body.statements) {
-          this.visit(stmt, fn.context, typemap);
-        }
+      for (let stmt of fn.body.statements) {
+        this.visit(stmt, fn.context, typemap);
       }
     }
 
     return {
       typemap,
-      usedClasses: typeResolver.usedClasses,
+      usedClasses: typeResolver.usedStructs,
       fnOverloadInfos: findOverloadedFunctions(typemap, this.tree)
     };
   }
@@ -120,6 +111,7 @@ export class TypeChecker {
       if (n.init) {
         let t = getFromTypemap(typemap, n.init)!;
         if (!isTypeEqual(type, t)) {
+          console.log(type, t);
           throw new Error("type mismatch!");
         }
       }
@@ -179,8 +171,8 @@ export class TypeChecker {
     typemap: TypeMap
   ) {
     this.visit(n.object, context, typemap);
-    let t: types.TypeNode = getFromTypemap(typemap, n.object) as types.Class;
-    if (t.constructor !== types.Class) {
+    let t: types.TypeNode = getFromTypemap(typemap, n.object) as types.Struct;
+    if (t.constructor !== types.Struct) {
       if (t.constructor === types.MetaType) {
         let v = (t as types.MetaType).type;
         switch (v.constructor) {
@@ -192,8 +184,8 @@ export class TypeChecker {
             typemap.set(n, e);
             return;
           }
-          case types.Class: {
-            let c = v as types.Class;
+          case types.Struct: {
+            let c = v as types.Struct;
             let overloadedFns = c.getMember(n.property);
 
             if (!(overloadedFns instanceof types.OverloadedFunction)) {
@@ -227,7 +219,7 @@ export class TypeChecker {
         );
       }
     } else {
-      let v = (t as types.Class).getMember(n.property);
+      let v = (t as types.Struct).getMember(n.property);
       typemap.set(n, v);
     }
   }
@@ -299,8 +291,8 @@ export class TypeChecker {
     }
 
     switch (n.operator) {
-      case InfixOperator.Equals:
-      case InfixOperator.Unequals:
+      case ast.InfixOperator.Equals:
+      case ast.InfixOperator.Unequals:
         typemap.set(n, context.getTypeByString("Boolean"));
         break;
       default:
@@ -314,7 +306,7 @@ export class TypeChecker {
     context: types.Context,
     typemap: TypeMap
   ) {
-    const fn = <types.Function>context.owner;
+    const fn = context.owner as types.Function;
     if (!n.expr) {
       if (fn.returns) {
         throw new Error(
@@ -335,26 +327,25 @@ export class TypeChecker {
     }
   }
 
-  visitObjectLiteralExprNode(
-    n: ast.ObjectLiteralExprNode,
+  visitObjectConstructionExprNode(
+    n: ast.ObjectConstructionExprNode,
     context: types.Context,
     typemap: TypeMap
   ) {
-    let literal = new types.ObjectLiteral();
-    literal.entries = [];
+    const struct = context.getType(n.type);
+    if (!(struct instanceof types.Struct)) {
+      throw new Error("Constructor type needs to be a struct");
+    }
 
     for (let [key, value] of n.entries) {
       this.visit(value, context, typemap);
       let t = getFromTypemap(typemap, value)!;
-      literal.entries.push(
-        create(types.ObjectLiteralEntry, {
-          key: key,
-          value: t
-        })
-      );
+      if (!isTypeEqual(struct.getMember(key), t)) {
+        throw new Error(`Type mismatch in ${struct.name} for ${key}`);
+      }
     }
 
-    typemap.set(n, literal);
+    typemap.set(n, struct);
   }
 
   visitIfStatementNode(
@@ -393,11 +384,11 @@ export class TypeChecker {
   ) {
     this.visit(n.expr, context, typemap);
     const t = getFromTypemap(typemap, n.expr);
-    if (!(t instanceof types.Class)) {
+    if (!(t instanceof types.Struct)) {
       throw new Error("For Expression needs to be a Class!");
     }
     let found = false;
-    for (const c of t.allParentClasses()) {
+    for (const c of t.implementedTraits()) {
       if (c.name === "Iterator") {
         // TODO: Fix for namespacing
         found = true;
@@ -425,18 +416,19 @@ export class TypeChecker {
 
     // Resolve the Iterators type
     const t = getFromTypemap(typemap, n.expr);
-    if (!(t instanceof types.Class)) {
+    if (!(t instanceof types.Struct)) {
       throw new Error("For Expression needs to be a Class!");
     }
     let found = false;
     let nextType: types.TypeNode;
-    for (const c of t.allParentClasses()) {
+    for (const c of t.implementedTraits()) {
       if (c.name === "Iterator") {
         // TODO: Fix for namespacing
+        // TODO: Reimplement
 
-        nextType = (c.getMember("next") as OverloadedFunction).functions[0]
-          .returns!;
-        ctx.addVariable(n.id, nextType);
+        // nextType = (c("next") as OverloadedFunction).functions[0]
+        //   .returns!;
+        // ctx.addVariable(n.id, nextType);
         found = true;
         break;
       }
@@ -471,19 +463,14 @@ export function isTypeEqual(
   weak: types.TypeNode
 ): boolean {
   // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
-  if (weak instanceof types.ObjectLiteral) {
-    if (weak.resolved) {
-      weak = weak.resolved;
-      console.log("RARE CASE: TODO: Check this!"); // TODO
-    } else {
-      resolveObjectLiteral(weak, strong);
-      return true;
-    }
+
+  if (weak === strong) {
+    return true;
   }
 
-  if (weak instanceof types.Class) {
+  if (weak instanceof types.Struct) {
     // allParentClasses also checks for the class itself
-    for (let inherited of weak.allParentClasses()) {
+    for (let inherited of weak.implementedTraits()) {
       if (strong === inherited) {
         return true;
       }
@@ -534,7 +521,7 @@ export function isTypeEqual(
     return true;
   }
 
-  return strong === weak;
+  return false;
 }
 
 // export function findAllOverloadedFunctions(
@@ -566,27 +553,6 @@ export function isTypeEqual(
 //   }
 //   return infos;
 // }
-
-export function resolveObjectLiteral(
-  object: types.ObjectLiteral,
-  type: types.TypeNode
-) {
-  if (type instanceof types.Class) {
-    for (let entry of object.entries) {
-      let target = type.getMember(entry.key);
-      if (!isTypeEqual(target, entry.value)) {
-        throw new Error("type mismatch in object literal");
-      }
-    }
-    object.resolved = type;
-    return;
-  } else {
-    throw new Error(
-      "Object literal can only be cast to classes! Was: " +
-        type.constructor.name
-    );
-  }
-}
 
 function findOverloadedFunctions(
   typemap: TypeMap,
@@ -630,7 +596,7 @@ class TypeResolver {
   toBeChecked: types.SemiInferred[];
   functions: FunctionCheck[];
   typemap: TypeMap;
-  usedClasses: ast.ClassDecNode[] = [];
+  usedStructs: ast.StructDecNode[] = [];
 
   constructor(private tree: ast.ProgramNode, typemap: TypeMap) {
     this.toBeChecked = [];
@@ -641,14 +607,13 @@ class TypeResolver {
   check(): types.Context {
     let context = new types.Context();
     this.addCompilerTypes(context);
-    // let classChecks: ClassCheck[] = [];
 
     let globalCheck: ClassCheck = { context, declarations: [] };
     this.tree.declarations.forEach(n => {
-      if (n instanceof ast.ClassDecNode) {
+      if (n instanceof ast.StructDecNode) {
         context.addType(
           n.name.name,
-          new ClassFactory(this, n, context, this.usedClasses, this.typemap)
+          new StructFactory(this, n, context, this.usedStructs, this.typemap)
         );
       } else if (n instanceof ast.EnumDecNode) {
         context.addType(
@@ -666,13 +631,9 @@ class TypeResolver {
       }
     });
 
-    // classChecks.push(globalCheck);
-
-    // for (let classCheck of classChecks) {
     for (let declaration of globalCheck.declarations) {
       this.visit(declaration, globalCheck.context);
     }
-    // }
 
     return context;
   }
@@ -682,7 +643,20 @@ class TypeResolver {
     context.addType("Boolean", new types.Boolean());
   }
 
-  visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
+  visitBehaviorNode(n: ast.BehaviorNode, context: types.Context) {
+    const t = context.getType(n.type);
+    if (!(t instanceof types.Struct)) {
+      throw new Error("Behavior only works on structs!");
+    }
+    for (let fn of n.functions) {
+      t.addMethod(types.NoTrait, this.parseFunctionDecNode(fn, context));
+    }
+  }
+
+  parseFunctionDecNode(
+    n: ast.FunctionDecNode,
+    context: types.Context
+  ): types.Function {
     let ctx = context.addSubContext();
     n.params.forEach(value => this.visit(value, ctx));
     let isStatic = false;
@@ -712,8 +686,12 @@ class TypeResolver {
       ctx.addVariable("this", context.owner); // TODO: This needs to work for functions within functions
     }
 
-    context.addVariable(n.name.name, fnType);
     this.typemap.set(n, fnType);
+    return fnType;
+  }
+
+  visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
+    context.addVariable(n.name.name, this.parseFunctionDecNode(n, context));
   }
 
   visitVarDecNode(n: ast.VarDecNode, context: types.Context) {
@@ -728,15 +706,6 @@ class TypeResolver {
       throw new Error("Init types are not yet supported");
     }
     context.addVariable(n.left.name, type);
-  }
-
-  visitInheritNode(n: ast.InheritNode, context: types.Context) {
-    let type = context.getType(n.class);
-    if (!(type instanceof types.Class)) {
-      throw new Error(`${type.constructor.name} is not a Class`);
-    }
-    (<types.Class>context.owner).inherits.push(type);
-    this.typemap.set(n.class, type);
   }
 
   addTypeChecked(
@@ -775,23 +744,23 @@ type TemplateParams = types.TypeNode[];
 
 interface ResolvedType {
   params: TemplateParams;
-  class: types.Class;
+  struct: types.Struct;
 }
 
-export class ClassFactory {
+export class StructFactory {
   // TODO: More sophisticated identification method than String serialization
-  private resolvedClasses: ResolvedType[] = [];
+  private resolvedStructs: ResolvedType[] = [];
 
   constructor(
     private resolver: TypeResolver,
-    private classDecNode: ast.ClassDecNode,
+    private structDecNode: ast.StructDecNode,
     private context: types.Context,
-    private usedClasses: ast.ClassDecNode[],
+    private usedStructs: ast.StructDecNode[],
     private typemap: TypeMap
   ) {}
 
-  private findCached(templateParams: TemplateParams): types.Class | undefined {
-    const resolvedType = this.resolvedClasses.find(({ params }) => {
+  private findCached(templateParams: TemplateParams): types.Struct | undefined {
+    const resolvedType = this.resolvedStructs.find(({ params }) => {
       if (params.length !== templateParams.length) {
         return false;
       }
@@ -804,49 +773,49 @@ export class ClassFactory {
     });
 
     if (resolvedType) {
-      return resolvedType.class;
+      return resolvedType.struct;
     }
 
     return undefined;
   }
 
-  resolve(templateParams: TemplateParams): types.Class {
+  resolve(templateParams: TemplateParams): types.Struct {
     const cached = this.findCached(templateParams);
     if (cached !== undefined) {
       return cached;
     }
 
-    const n = cloneDeep(this.classDecNode);
+    const n = cloneDeep(this.structDecNode);
 
-    this.usedClasses.push(n);
+    this.usedStructs.push(n);
 
-    let cl: types.Class = new types.Class(
+    let struct: types.Struct = new types.Struct(
       n.name.name,
       this.context.addSubContext()
     );
 
-    cl.members.owner = cl;
-    this.typemap.set(n, cl);
+    struct.fields.owner = struct; // TODO: What is this?
+    this.typemap.set(n, struct);
 
-    this.resolvedClasses.push({
-      class: cl,
+    this.resolvedStructs.push({
+      struct: struct,
       params: templateParams
     });
 
-    if (templateParams.length > this.classDecNode.templateParams.length) {
+    if (templateParams.length > this.structDecNode.templateParams.length) {
       throw new Error(
         "Invocation Template Params are longer than Class Template Params"
       );
     }
 
-    for (let i = 0; i < this.classDecNode.templateParams.length; i++) {
-      let paramDef = this.classDecNode.templateParams[i];
+    for (let i = 0; i < this.structDecNode.templateParams.length; i++) {
+      let paramDef = this.structDecNode.templateParams[i];
       let paramVal = templateParams[i];
       if (
         paramDef.type instanceof ast.PlainTypeNode &&
         paramDef.type.name === "Type"
       ) {
-        cl.members.addType(paramDef.left.name, paramVal);
+        struct.members.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
           "Template Params other than Type are not yet supported"
@@ -855,10 +824,10 @@ export class ClassFactory {
     }
 
     for (let dec of n.declarations) {
-      this.resolver.visit(dec, cl.members);
+      this.resolver.visit(dec, struct.members);
     }
 
-    return cl;
+    return struct;
   }
 }
 

@@ -51,9 +51,22 @@ declaration
 
 typeDef
     : 'function' ID tmplDefParamList? fnDef        # funcDec
-    | ID tmplDefParamList? ':' 'enum' enumScope    # enumDec
-    | ID tmplDefParamList? ':' 'class' classScope  # classDec
-    | ID tmplDefParamList? ':' 'alias' vtype       # aliasDec
+    | 'enum' ID tmplDefParamList? enumScope        # enumDec
+    | 'struct' ID tmplDefParamList? structBody     # structDec
+    | 'alias' ID tmplDefParamList? ':' vtype       # aliasDec
+    | 'behavior' behaviorHead behaviorContent      # behaviorDec
+    ;
+
+behaviorHead
+    : plainType
+    ;
+
+behaviorContent
+    : '{' ENDL* (behaviorFnDef (delim behaviorFnDef)*)? ENDL* '}'
+    ;
+
+behaviorFnDef
+    : ID tmplDefParamList? fnDef
     ;
 
 fnDef
@@ -64,13 +77,13 @@ scope
     : '{' ENDL* (statement (delim statement)*)? ENDL* '}'
     ;
 
-classScope
-    : '{' ENDL* (classScopeDec (delim classScopeDec)*)? ENDL* '}'
+
+structBody
+    : '{' ENDL* (structField (delim structField)*)? ENDL* '}'
     ;
 
-classScopeDec
-    : taggedDeclaration                   # classScopeDecNormal
-    | 'inherit' plainType                 # classScopeInherit
+structField
+    : tags? varDef                   # structFieldDec
     ;
 
 fnType
@@ -141,6 +154,11 @@ expr : left=expr '.' right=ID              # memberExpr
     | left=expr op=('+' | '-') right=expr  # infixExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr
     | '[' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* ']' # objectLiteralExpr
+    | '<' plainType constructorParam* '/' '>'                      # constructorSimpleExpr
+    ;
+
+constructorParam
+    : ID '=' expr
     ;
 
 enumScope

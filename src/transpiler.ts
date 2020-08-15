@@ -6,18 +6,18 @@ import { create, getFromTypemap } from "./util";
 import { FunctionOverloadInfo } from "./typechecker";
 
 class ClassInfo {
-  astNode: ast.ClassDecNode;
+  astNode: ast.StructDecNode;
   memberVars: ast.VarDecNode[];
   methods: ast.FunctionDecNode[];
 }
 
 export class Transpiler {
-  classMap: Map<types.Class, ClassInfo>;
+  structMap: Map<types.Struct, ClassInfo>;
   functionNameMap: Map<types.Function, string>;
 
   constructor(
     private typemap: Map<ast.Node, types.TypeNode>,
-    private usedClasses: ast.ClassDecNode[],
+    private usedClasses: ast.StructDecNode[],
     fnOverloads: FunctionOverloadInfo[]
   ) {
     this.buildClassMap();
@@ -25,7 +25,7 @@ export class Transpiler {
   }
 
   buildClassMap() {
-    this.classMap = new Map<types.Class, ClassInfo>();
+    this.structMap = new Map<types.Struct, ClassInfo>();
 
     for (let dec of this.usedClasses) {
       let classInfo = create(ClassInfo, {
@@ -34,13 +34,13 @@ export class Transpiler {
         methods: []
       });
 
-      this.classMap.set(
-        getFromTypemap(this.typemap, dec) as types.Class,
+      this.structMap.set(
+        getFromTypemap(this.typemap, dec) as types.Struct,
         classInfo
       );
     }
 
-    for (let classInfo of this.classMap.values()) {
+    for (let classInfo of this.structMap.values()) {
       let processedFunctions: types.Function[] = [];
 
       for (let dec of this.getAllDeclarations(classInfo.astNode)) {
@@ -85,7 +85,7 @@ export class Transpiler {
   transpile(program: ast.ProgramNode): ESTree.Program {
     let stmts: ESTree.Statement[] = [];
     for (let declaration of program.declarations) {
-      if (declaration instanceof ast.ClassDecNode) {
+      if (declaration instanceof ast.StructDecNode) {
         // These are being done separately
         continue;
       }
@@ -232,7 +232,7 @@ export class Transpiler {
   visitRefExprNode(e: ast.RefExprNode): ESTree.Expression {
     const t = getFromTypemap(this.typemap, e.expr);
 
-    if (t instanceof types.Class || t instanceof types.Function) {
+    if (t instanceof types.Struct || t instanceof types.Function) {
       return this.visit(e.expr);
     }
 
@@ -248,7 +248,7 @@ export class Transpiler {
 
   visitDerefExprNode(e: ast.DerefExprNode): ESTree.Expression {
     const t = getFromTypemap(this.typemap, e);
-    if (t instanceof types.Class) {
+    if (t instanceof types.Struct) {
       return this.visit(e.expr);
     }
     return {
@@ -489,16 +489,13 @@ export class Transpiler {
     };
   }
 
-  visitObjectLiteralExprNode(
-    e: ast.ObjectLiteralExprNode
+  visitObjectConstructionExprNode(
+    e: ast.ObjectConstructionExprNode
   ): ESTree.NewExpression {
-    let obj: types.ObjectLiteral = getFromTypemap(
-      this.typemap,
-      e
-    ) as types.ObjectLiteral;
+    let obj: types.Struct = getFromTypemap(this.typemap, e) as types.Struct;
 
     let args: ESTree.Expression[] = <ESTree.Expression[]>(
-      this.classMap.get(obj.resolved!)!.memberVars.map(dec => {
+      this.structMap.get(obj)!.memberVars.map(dec => {
         let t = e.entries.get(dec.left.name);
         if (!t) {
           return {
@@ -514,26 +511,26 @@ export class Transpiler {
       type: "NewExpression",
       callee: {
         type: "Identifier",
-        name: obj.resolved!.name
+        name: obj.name
       },
       arguments: args
     };
   }
 
-  visitClassDecNode(e: ast.ClassDecNode) {
+  visitStructDecNode(e: ast.StructDecNode) {
     let params: ESTree.Identifier[] = [];
     let assignments: ESTree.Statement[] = [];
     let stmts: ESTree.Statement[] = [];
 
     let processedFunctions: types.Function[] = [];
 
-    let cl = getFromTypemap(this.typemap, e) as types.Class;
+    let cl = getFromTypemap(this.typemap, e) as types.Struct;
 
     if (cl.abstract) {
       return [];
     }
 
-    let classInfo = this.classMap.get(cl)!;
+    let classInfo = this.structMap.get(cl)!;
 
     for (let dec of classInfo.memberVars) {
       let { param, stmt } = createConstrAssign((<ast.VarDecNode>dec).left.name);
@@ -573,14 +570,14 @@ export class Transpiler {
   }
 
   *getAllDeclarations(
-    e: ast.ClassDecNode
+    e: ast.StructDecNode
   ): IterableIterator<ast.DeclarationNode> {
     for (let dec of e.declarations) {
       yield dec;
     }
-    let c = <types.Class>getFromTypemap(this.typemap, e);
+    let c = <types.Struct>getFromTypemap(this.typemap, e);
     for (let inherit of c.inherits) {
-      yield* this.getAllDeclarations(this.classMap.get(inherit)!.astNode);
+      yield* this.getAllDeclarations(this.structMap.get(inherit)!.astNode);
     }
   }
 }

@@ -2,9 +2,6 @@ import { LuxParserVisitor } from "../parser-ts/LuxParserVisitor";
 import {
   AssignStmtContext,
   BracketExprContext,
-  ClassDecContext,
-  ClassScopeInheritContext,
-  ClassScopeDecNormalContext,
   DecStmtContext,
   EnumDecContext,
   EnumEntryPlainContext,
@@ -52,7 +49,13 @@ import {
   TypeRefContext,
   RefExprContext,
   DerefExprContext,
-  TypeFunctionPtrContext
+  TypeFunctionPtrContext,
+  StructDecContext,
+  StructFieldDecContext,
+  ConstructorSimpleExprContext,
+  ConstructorParamContext,
+  BehaviorDecContext,
+  BehaviorFnDefContext
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import * as ast from "./ast";
@@ -250,7 +253,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return this.visit(ctx.typeDef());
   }
 
-  visitFuncDec(ctx: FuncDecContext): ast.FunctionDecNode {
+  visitFuncDec(
+    ctx: FuncDecContext | BehaviorFnDefContext
+  ): ast.FunctionDecNode {
     let retctx: FnReturnTypeContext = ctx.fnDef().fnReturnType()!;
     let returns: ast.TypeNode | undefined;
     if (retctx) {
@@ -343,8 +348,8 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return this.visit(ctx.fnCallStatement());
   }
 
-  visitClassDec(ctx: ClassDecContext): ast.ClassDecNode {
-    const decs = ctx.classScope().classScopeDec();
+  visitStructDec(ctx: StructDecContext): ast.StructDecNode {
+    const decs = ctx.structBody().structField();
     let templateParams: ast.VarDecNode[] = [];
 
     if (ctx.tmplDefParamList()) {
@@ -352,7 +357,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       templateParams = defParams.map<ast.VarDecNode>(dec => this.visit(dec));
     }
 
-    return create(ast.ClassDecNode, {
+    return create(ast.StructDecNode, {
       name: create(ast.IdentifierNode, { name: ctx.ID().text }),
       declarations: decs.map(dec => this.visit(dec)),
       templateParams
@@ -363,18 +368,8 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return this.visit(ctx.varDef()) as ast.VarDecNode;
   }
 
-  visitClassScopeDecNormal(
-    ctx: ClassScopeDecNormalContext
-  ): ast.DeclarationNode {
-    return this.visit(ctx.taggedDeclaration());
-  }
-
-  visitClassScopeInherit(ctx: ClassScopeInheritContext): ast.InheritNode {
-    const typeNode = this.visit(ctx.plainType()) as ast.TypeNode;
-
-    return create(ast.InheritNode, {
-      class: typeNode
-    });
+  visitStructFieldDec(ctx: StructFieldDecContext): ast.DeclarationNode {
+    return this.visit(ctx.varDef());
   }
 
   visitFnCallStatementImplicit(
@@ -422,7 +417,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     });
   }
 
-  visitForVarDefStmt(ctx: ForVarDefStmtContext): ast.Node {
+  visitForVarDefStmt(ctx: ForVarDefStmtContext): ast.ForVarDefStatementNode {
     return create(ast.ForVarDefStatementNode, {
       expr: this.visit(ctx.expr()),
       id: ctx.ID().text,
@@ -430,6 +425,30 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         ? (this.visit(ctx.vtype()!) as ast.TypeNode)
         : undefined,
       scope: undefined
+    });
+  }
+
+  visitConstructorSimpleExpr(
+    ctx: ConstructorSimpleExprContext
+  ): ast.ObjectConstructionExprNode {
+    let entries = new Map<string, ast.ExprNode>();
+    for (let entry of ctx.constructorParam()) {
+      entries.set(entry.ID().text, this.visit(entry.expr()));
+    }
+
+    return create(ast.ObjectConstructionExprNode, {
+      type: this.visit(ctx.plainType()),
+      entries
+    });
+  }
+
+  visitBehaviorDec(ctx: BehaviorDecContext): ast.BehaviorNode {
+    return create(ast.BehaviorNode, {
+      type: this.visit(ctx.behaviorHead().plainType()),
+      functions: ctx
+        .behaviorContent()
+        .behaviorFnDef()
+        .map(def => this.visitFuncDec(def))
     });
   }
 

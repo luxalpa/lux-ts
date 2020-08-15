@@ -67,7 +67,9 @@ LT: '<';
 GTE: '>=';
 LTE: '<=';
 
-CLASS: 'class';
+STRUCT: 'struct';
+TRAIT: 'trait';
+BEHAVIOR: 'behavior';
 RETURN: 'return';
 IF: 'if';
 ELSE: 'else';
@@ -77,7 +79,6 @@ GOTO: 'goto';
 FOR: 'for';
 MATCH: 'match';
 ENUM: 'enum';
-INHERIT: 'inherit';
 ALIAS: 'alias';
 FUNCTION: 'function';
 
