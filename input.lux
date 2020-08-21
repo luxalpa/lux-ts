@@ -19,6 +19,10 @@ behavior MyStruct {
 
 function main() => {
     obj := <MyStruct age=255 />
+    ptr := &obj.age
     obj.run()
+    ptr = &obj.name
+
+    log(*ptr)
     log(obj.age)
 }

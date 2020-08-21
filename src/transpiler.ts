@@ -166,8 +166,6 @@ export class Transpiler {
       return this.visit(e.expr);
     }
 
-    console.log(t);
-
     return {
       type: "ArrowFunctionExpression",
       expression: true,

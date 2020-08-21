@@ -2,6 +2,7 @@ import { ast } from "./ast";
 import * as types from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import cloneDeep from "lodash.clonedeep";
+import { TypeNode } from "./typenodes";
 
 interface ResolvedFunctionInfo {
   context: types.Context;
@@ -246,7 +247,9 @@ export class TypeChecker {
     if (!(t instanceof types.MetaType)) {
       const v = types.getMember(t, n.property);
       if (!v) {
-        throw new Error(`Property ${n.property} not defined`);
+        throw new Error(
+          `Property '${n.property}' does not exist on '${getTypeName(t)}'`
+        );
       }
       this.typemap.set(n, v);
     } else {
@@ -261,7 +264,7 @@ export class TypeChecker {
 
       // TODO: Static and namespaced calls
 
-      throw new Error(`${t.type.constructor.name} is not implemented`);
+      throw new Error(`${getTypeName(t.type)} is not implemented`);
     }
   }
 
@@ -300,22 +303,32 @@ export class TypeChecker {
   visitAssignmentStatement(n: ast.AssignmentStatement, context: types.Context) {
     this.visit(n.right, context);
     this.visit(n.left, context);
-    if (
-      getFromTypemap(this.typemap, n.left) !==
-      getFromTypemap(this.typemap, n.right)
-    ) {
-      throw "Can't assign these values";
+
+    const leftType = getFromTypemap(this.typemap, n.left);
+    const rightType = getFromTypemap(this.typemap, n.right);
+
+    if (!isTypeEqual(leftType, rightType)) {
+      throw new Error(
+        `Type '${getTypeName(
+          rightType
+        )}' is not assignable to type '${getTypeName(leftType)}'`
+      );
     }
   }
 
   visitInfixExpr(n: ast.InfixExpr, context: types.Context) {
     this.visit(n.left, context);
     this.visit(n.right, context);
-    if (
-      getFromTypemap(this.typemap, n.left) !==
-      getFromTypemap(this.typemap, n.right)
-    ) {
-      throw "Left and right value have different type";
+
+    const leftType = getFromTypemap(this.typemap, n.left);
+    const rightType = getFromTypemap(this.typemap, n.right);
+
+    if (!isTypeEqual(leftType, rightType)) {
+      throw new Error(
+        `Operator '${n.operator}' can not be applied to types ${getTypeName(
+          leftType
+        )} and ${getTypeName(rightType)}`
+      );
     }
 
     switch (n.operator) {
@@ -346,7 +359,9 @@ export class TypeChecker {
 
     if (!isTypeEqual(fn.returns, exprType)) {
       throw new Error(
-        `Type '${exprType.constructor.name}' is not assignable to type '${fn.returns.constructor.name}'`
+        `Type '${getTypeName(
+          exprType
+        )}' is not assignable to type '${getTypeName(fn.returns)}'`
       );
     }
   }
@@ -517,6 +532,30 @@ export function isTypeEqual(
   }
 
   return false;
+}
+
+export function getTypeName(t: TypeNode): string {
+  if (t instanceof types.Integer) {
+    return "Integer";
+  }
+  if (t instanceof types.Boolean) {
+    return "Boolean";
+  }
+  if (t instanceof types.Void) {
+    return "Void";
+  }
+  if (t instanceof types.RefType) {
+    return "&" + getTypeName(t.ref);
+  }
+  if (t instanceof types.Struct) {
+    return t.name;
+  }
+  if (t instanceof types.Function) {
+    return `function (${t.parameters
+      .map(param => getTypeName(param))
+      .join(", ")}) => ${getTypeName(t.returns)}`;
+  }
+  return `UnknownType[${t.constructor.name}]`;
 }
 
 // export class AliasFactory extends TypeNode {
