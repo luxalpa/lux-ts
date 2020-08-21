@@ -11,8 +11,9 @@ struct MyStruct {
 }
 
 behavior MyStruct {
-    run() => {
+    run() => Void {
         log(this.age)
+        return
     }
 }
 

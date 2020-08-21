@@ -31,10 +31,12 @@ export class Integer extends TypeNode {}
 
 export class Boolean extends TypeNode {}
 
+export class Void extends TypeNode {}
+
 export class Function extends TypeNode {
   name: string;
   parameters: TypeNode[];
-  returns: TypeNode | null;
+  returns: TypeNode;
   isStatic: boolean;
   belongsTo?: TypeNode;
 }

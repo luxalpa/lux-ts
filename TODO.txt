@@ -1,4 +1,3 @@
-- Implement Void Type
 - Support Function Pointer call expr
 - implement templates for behaviors
 - find out how to do type aliases

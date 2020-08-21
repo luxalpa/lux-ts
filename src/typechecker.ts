@@ -43,8 +43,6 @@ export class TypeChecker {
     };
   }
 
-  addBehaviorFn(type: types.TypeNode, trait: types.Trait, fn: types.Function) {}
-
   // Resolve does a first run over the code in order to register all globally accessible names.
   resolve(context: types.Context): ResolvedFunctionInfo[] {
     const behaviors = new Array<ast.Behavior>();
@@ -118,7 +116,9 @@ export class TypeChecker {
       parameters: n.params.map(value => {
         return parentContext.getType(value.type!);
       }),
-      returns: n.returns ? parentContext.getType(n.returns) : null,
+      returns: n.returns
+        ? parentContext.getType(n.returns)
+        : parentContext.getTypeByString("Void"),
       isStatic,
       typeMethods: new types.TypeMethods(),
       belongsTo: behaviorTarget
@@ -145,6 +145,7 @@ export class TypeChecker {
   addExternals(context: types.Context) {
     context.addType("Integer", new types.Integer());
     context.addType("Boolean", new types.Boolean());
+    context.addType("Void", new types.Void());
 
     context.addVariable(
       "log",
@@ -152,7 +153,7 @@ export class TypeChecker {
         name: "log",
         parameters: [context.getTypeByString("Integer")],
         isStatic: false,
-        returns: null,
+        returns: context.getTypeByString("Void"),
         typeMethods: new types.TypeMethods()
       })
     );
@@ -335,23 +336,18 @@ export class TypeChecker {
       throw new Error("Return statement must be inside function!");
     }
 
-    if (!n.expr) {
-      if (fn.returns) {
-        throw new Error(
-          `Function needs to return a value (${fn.returns.constructor.name})`
-        );
-      }
-    } else {
+    if (n.expr) {
       this.visit(n.expr, context);
-      if (!fn.returns) {
-        throw new Error(
-          `Function should not return a value, but got (${n.expr.constructor.name})`
-        );
-      }
+    }
 
-      if (!isTypeEqual(fn.returns, getFromTypemap(this.typemap, n.expr)!)) {
-        throw "Return value doesn't match to function";
-      }
+    const exprType = n.expr
+      ? getFromTypemap(this.typemap, n.expr)
+      : context.getTypeByString("Void");
+
+    if (!isTypeEqual(fn.returns, exprType)) {
+      throw new Error(
+        `Type '${exprType.constructor.name}' is not assignable to type '${fn.returns.constructor.name}'`
+      );
     }
   }
 
