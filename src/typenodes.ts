@@ -1,29 +1,48 @@
-import * as ast from "./ast";
-import { create } from "./util";
-import { AliasFactory, StructFactory } from "./typechecker";
+import { ast } from "./ast";
+import { create, TypeMap } from "./util";
+import { TypeChecker } from "./typechecker";
+import cloneDeep from "lodash.clonedeep";
 
-export interface TypeNode {}
+export class TypeMethods {
+  methods = new Map<Trait, Function[]>();
 
-export class Enum implements TypeNode {
+  addMethod(trait: Trait, fn: Function) {
+    const fns = this.methods.get(trait) || [];
+    fns.push(fn);
+    if (!this.methods.has(trait)) {
+      this.methods.set(trait, fns);
+    }
+  }
+}
+
+export class TypeNode {
+  // We can define methods on any type, so we need this as a common object.
+  // We could inline this using inheritance, but that would make type creation awkward (because of the function) and we'd need custom constructors on every TypeNode.
+  typeMethods: TypeMethods = new TypeMethods();
+}
+
+export class Enum extends TypeNode {
   name: string;
   members: string[];
   internalType: TypeNode;
 }
 
-export class Integer implements TypeNode {}
+export class Integer extends TypeNode {}
 
-export class Boolean implements TypeNode {}
+export class Boolean extends TypeNode {}
 
-export class Function implements TypeNode {
+export class Function extends TypeNode {
   name: string;
   parameters: TypeNode[];
   returns: TypeNode | null;
   isStatic: boolean;
+  belongsTo?: TypeNode;
 }
 
-export class FunctionPointer implements TypeNode {
-  parameters: TypeNode[];
-  returns: TypeNode | null;
+export class FunctionPointer extends TypeNode {
+  constructor(public parameters: TypeNode[], public returns: TypeNode | null) {
+    super();
+  }
 }
 
 export class Trait {
@@ -32,70 +51,54 @@ export class Trait {
 
 export const NoTrait = new Trait("");
 
-export class Struct implements TypeNode {
-  methods = new Map<Trait, Function[]>();
-  constructor(public name: string, public fields: Context) {}
+export class Struct extends TypeNode {
+  fields = new Map<string, TypeNode>();
+  constructor(public name: string) {
+    super();
+  }
+}
 
-  addMethod(trait: Trait, fn: Function) {
-    const fns = this.methods.get(trait);
-    if (!fns) {
-      this.methods.set(trait, [fn]);
-    } else {
-      fns.push(fn);
+export function getMember(t: TypeNode, member: string): TypeNode | undefined {
+  if (t instanceof Struct) {
+    const v = t.fields.get(member);
+    if (v) {
+      return v;
     }
   }
 
-  getMember(name: string): TypeNode {
-    let fns: Function[] = [];
-    for (const member of this.allMembers()) {
-      if (member instanceof Function) {
-        fns.push(member);
-      } else {
-        return member;
+  const fns = t.typeMethods.methods.get(NoTrait);
+  if (fns) {
+    const v = fns.find(fn => fn.name == member);
+    if (v) {
+      return v;
+    }
+  }
+
+  let retFn: Function | undefined;
+
+  for (const [trait, fns] of t.typeMethods.methods) {
+    const v = fns.find(fn => fn.name == member);
+    if (v) {
+      if (retFn) {
+        throw new Error(
+          `Function ${member} has more than one possible definition.`
+        );
       }
-    }
-    if (fns.length > 0) {
-      return create(OverloadedFunction, {
-        functions: fns
-      });
-    }
-    throw new Error(`Member ${name} not found on struct ${this.name}`);
-  }
-
-  *allMembers(): IterableIterator<TypeNode> {
-    for (const [trait, methods] of this.methods) {
-      for (const method of methods) {
-        yield method;
-      }
-    }
-    for (let field of this.fields.variables) {
-      yield field;
+      retFn = v;
     }
   }
 
-  implementedTraits(): Trait[] {
-    // TODO: We need to actually check that all trait methods are implemented, not just some of them
-    const set = new Set<Trait>();
-    for (const [trait, methods] of this.methods) {
-      set.add(trait);
-    }
-    return [...set];
-  }
+  return retFn;
 }
 
 // For using a Type like a variable, like when using Static Functions
-export class MetaType implements TypeNode {
-  constructor(public type: TypeNode) {}
+export class MetaType extends TypeNode {
+  constructor(public type: TypeNode) {
+    super();
+  }
 }
 
-// SemiInferred types need to still be typechecked
-export class SemiInferred implements TypeNode {
-  expr: ast.ExprNode;
-  context: Context;
-  forcedType: TypeNode;
-}
-
-export class ObjectLiteral implements TypeNode {
+export class ObjectLiteral extends TypeNode {
   entries: ObjectLiteralEntry[];
   type: Struct;
 }
@@ -105,17 +108,11 @@ export class ObjectLiteralEntry {
   value: TypeNode;
 }
 
-export class OverloadedFunction implements TypeNode {
-  functions: Function[];
-}
-
 // &Type
-export class RefType implements TypeNode {
-  ref: TypeNode;
-}
-
-export class ResolvableType implements TypeNode {
-  constructor(public resolved: TypeNode) {}
+export class RefType extends TypeNode {
+  constructor(public ref: TypeNode) {
+    super();
+  }
 }
 
 interface ContextSymbol {
@@ -127,15 +124,12 @@ export class Context {
   parent?: Context;
   types: Map<string, TypeNode>;
   variables: ContextSymbol[];
-  owner: Function | Struct;
+  owner?: Function;
 
   constructor(parent?: Context) {
     this.types = new Map<string, TypeNode>();
     this.variables = [];
     this.parent = parent;
-    if (parent) {
-      this.owner = parent.owner;
-    }
   }
 
   addSubContext(): Context {
@@ -154,21 +148,19 @@ export class Context {
   }
 
   // Resolves the type of type AST nodes
-  getType(node: ast.TypeNode): TypeNode {
-    if (node instanceof ast.PlainTypeNode) {
+  getType(node: ast.Type): TypeNode {
+    if (node instanceof ast.PlainType) {
       return this.getTypeByString(node.name, node.templateParams);
     }
-    if (node instanceof ast.RefTypeNode) {
+    if (node instanceof ast.RefType) {
       const ref = this.getType(node.type);
-      return create(RefType, {
-        ref
-      });
+      return new RefType(ref);
     }
-    if (node instanceof ast.FunctionPtrTypeNode) {
-      return create(FunctionPointer, {
-        returns: this.getType(node.returns),
-        parameters: node.params.map(p => this.getType(p.type!))
-      });
+    if (node instanceof ast.FunctionPtrType) {
+      return new FunctionPointer(
+        node.params.map(p => this.getType(p.type!)),
+        this.getType(node.returns)
+      );
     }
     console.log(node);
     throw new Error("unknown TypeNode");
@@ -176,7 +168,7 @@ export class Context {
 
   getTypeByString(
     name: string,
-    params: (ast.TypeNode | ast.ExprNode)[] = []
+    params: (ast.Type | ast.Expr)[] = []
   ): TypeNode {
     let typeNode: TypeNode | undefined;
     for (const ctx of this.getAllContexts()) {
@@ -190,9 +182,9 @@ export class Context {
       throw new Error(`Type "${name}" not found`);
     }
 
-    if (typeNode instanceof StructFactory || typeNode instanceof AliasFactory) {
+    if (typeNode instanceof StructFactory) {
       const templateParams = params.map(param => {
-        if (param instanceof ast.ExprNode) {
+        if (param instanceof ast.Expr) {
           throw new Error("Expression Templates not yet supported!");
         } else {
           return this.getType(param);
@@ -223,40 +215,21 @@ export class Context {
     });
   }
 
-  getMember(name: string): TypeNode | null {
-    let fns: Function[] = [];
-    for (const v of this.variables) {
-      if (name === v.name) {
-        // Only Functions can be overloaded.
-        if (!(v.type instanceof Function)) {
-          return v.type;
-        }
-        fns.push(v.type as Function);
-      }
-    }
-
-    if (fns.length == 0) {
+  getOwner(): Function | null {
+    if (this.owner) {
+      return this.owner;
+    } else if (this.parent) {
+      return this.parent.getOwner();
+    } else {
       return null;
     }
-
-    return create(OverloadedFunction, {
-      functions: fns
-    });
   }
 
   getVariable(name: string): TypeNode {
-    let fns: Function[] = [];
     for (const ctx of this.getAllContexts()) {
-      if (ctx.owner instanceof Struct) {
-        // Skip struct members. They can only be used explicitly using getMember
-        continue;
-      }
       for (const v of ctx.variables) {
         if (name === v.name) {
-          if (!(v.type instanceof Function)) {
-            return v.type;
-          }
-          fns.push(v.type as Function);
+          return v.type;
         }
       }
 
@@ -269,14 +242,93 @@ export class Context {
       }
     }
 
-    if (fns.length > 0) {
-      return create(ResolvableType, {
-        resolved: create(OverloadedFunction, {
-          functions: fns
-        })
-      });
+    throw new Error(`Variable ${name} not found`);
+  }
+}
+
+type TemplateParams = TypeNode[];
+
+interface ResolvedType {
+  params: TemplateParams;
+  struct: Struct;
+}
+
+export class StructFactory extends TypeNode {
+  private resolvedStructs: ResolvedType[] = [];
+
+  constructor(
+    private typeChecker: TypeChecker,
+    private structDecNode: ast.StructDec,
+    private context: Context,
+    private typemap: TypeMap
+  ) {
+    super();
+  }
+
+  private findCached(templateParams: TemplateParams): Struct | undefined {
+    const resolvedType = this.resolvedStructs.find(({ params }) => {
+      if (params.length !== templateParams.length) {
+        return false;
+      }
+      for (let i = 0; i < templateParams.length; i++) {
+        if (templateParams[i] !== params[i]) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (resolvedType) {
+      return resolvedType.struct;
     }
 
-    throw new Error(`Variable ${name} not found`);
+    return undefined;
+  }
+
+  resolve(templateParams: TemplateParams): Struct {
+    const cached = this.findCached(templateParams);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const n = cloneDeep(this.structDecNode);
+
+    let struct: Struct = new Struct(n.name.name);
+
+    this.typemap.set(n, struct);
+
+    this.resolvedStructs.push({
+      struct,
+      params: templateParams
+    });
+
+    if (templateParams.length > this.structDecNode.templateParams.length) {
+      throw new Error(
+        "Invocation Template Params are longer than Class Template Params"
+      );
+    }
+
+    const templateSubContext = this.context.addSubContext();
+
+    for (let i = 0; i < this.structDecNode.templateParams.length; i++) {
+      let paramDef = this.structDecNode.templateParams[i];
+      let paramVal = templateParams[i];
+      if (
+        paramDef.type instanceof ast.PlainType &&
+        paramDef.type.name === "Type"
+      ) {
+        templateSubContext.addType(paramDef.left.name, paramVal);
+      } else {
+        throw new Error(
+          "Template Params other than Type are not yet supported"
+        );
+      }
+    }
+
+    for (let dec of n.declarations) {
+      this.typeChecker.visitVarDec(dec, templateSubContext, struct);
+    }
+
+    return struct;
   }
 }

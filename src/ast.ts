@@ -1,173 +1,171 @@
-export class Node {}
+export namespace ast {
+  export class Node {}
 
-export class ExprNode extends Node {}
+  export class Expr extends Node {}
 
-export enum InfixOperator {
-  Addition = "+",
-  Subtraction = "-",
-  Multiplication = "*",
-  Division = "/",
-  Equals = "=",
-  Unequals = "!="
-}
+  export enum InfixOperator {
+    Addition = "+",
+    Subtraction = "-",
+    Multiplication = "*",
+    Division = "/",
+    Equals = "=",
+    Unequals = "!="
+  }
 
-export class InfixExprNode extends ExprNode {
-  operator: InfixOperator;
-  left: ExprNode;
-  right: ExprNode;
-}
+  export class InfixExpr extends Expr {
+    operator: InfixOperator;
+    left: Expr;
+    right: Expr;
+  }
 
-export class NumberNode extends ExprNode {
-  value: number;
-}
+  export class Number extends Expr {
+    value: number;
+  }
 
-export class FunctionCallExprNode extends ExprNode {
-  fn: ExprNode;
-  params: ExprNode[];
-}
+  export class FunctionCallExpr extends Expr {
+    fn: Expr;
+    params: Expr[];
+  }
 
-export class IdentifierExprNode extends ExprNode {
-  id: IdentifierNode;
-}
+  export class IdentifierExpr extends Expr {
+    id: Identifier;
+  }
 
-export class MemberExprNode extends ExprNode {
-  object: ExprNode;
-  property: string;
-}
+  export class MemberExpr extends Expr {
+    object: Expr;
+    property: string;
+  }
 
-export class ObjectLiteralExprNode extends ExprNode {
-  entries: Map<string, ExprNode>;
-}
+  export class ObjectLiteralExpr extends Expr {
+    entries: Map<string, Expr>;
+  }
 
-export class ObjectConstructionExprNode extends ExprNode {
-  type: PlainTypeNode;
-  entries: Map<string, ExprNode>;
-}
+  export class ObjectConstructionExpr extends Expr {
+    type: PlainType;
+    entries: Map<string, Expr>;
+  }
 
-export class BehaviorNode extends Node {
-  type: PlainTypeNode;
-  functions: FunctionDecNode[];
-}
+  export class Behavior extends Node {
+    type: PlainType;
+    functions: FunctionDec[];
+  }
 
-export class RefExprNode extends ExprNode {
-  expr: ExprNode;
-}
+  export class RefExpr extends Expr {
+    expr: Expr;
+  }
 
-export class DerefExprNode extends ExprNode {
-  expr: ExprNode;
-}
+  export class DerefExpr extends Expr {
+    expr: Expr;
+  }
 
-export class IdentifierNode extends Node {
-  name: string;
-}
+  export class Identifier extends Node {
+    name: string;
+  }
 
-export class StatementNode extends Node {}
+  export class Statement extends Node {}
 
-export class AssignmentStatementNode extends StatementNode {
-  left: ExprNode;
-  right: ExprNode;
-}
+  export class AssignmentStatement extends Statement {
+    left: Expr;
+    right: Expr;
+  }
 
-export class IfStatementNode extends StatementNode {
-  condition: ExprNode;
-  scope: ScopeNode;
-}
+  export class IfStatement extends Statement {
+    condition: Expr;
+    scope: Scope;
+  }
 
-export class ForStatementNode extends StatementNode {
-  scope?: ScopeNode;
-}
+  export class ForStatement extends Statement {
+    scope?: Scope;
+  }
 
-export class ForAssignStatementNode extends ForStatementNode {
-  left: ExprNode;
-  right: ExprNode;
-}
+  export class ForAssignStatement extends ForStatement {
+    left: Expr;
+    right: Expr;
+  }
 
-export class ForExprStatementNode extends ForStatementNode {
-  expr: ExprNode;
-}
+  export class ForExprStatement extends ForStatement {
+    expr: Expr;
+  }
 
-export class ForVarDefStatementNode extends ForStatementNode {
-  id: string;
-  type?: TypeNode;
-  expr: ExprNode;
-}
+  export class ForVarDefStatement extends ForStatement {
+    id: string;
+    type?: Type;
+    expr: Expr;
+  }
 
-export class ReturnStatementNode extends StatementNode {
-  expr?: ExprNode;
-}
+  export class ReturnStatement extends Statement {
+    expr?: Expr;
+  }
 
-export class BreakStatementNode extends StatementNode {}
+  export class BreakStatement extends Statement {}
 
-export class FunctionCallStmtNode extends StatementNode {
-  fnCall: FunctionCallExprNode;
-}
+  export class FunctionCallStmt extends Statement {
+    fnCall: FunctionCallExpr;
+  }
 
-export class DeclarationNode extends StatementNode {}
+  export class Declaration extends Statement {}
 
-export class FunctionDecNode extends DeclarationNode {
-  name: IdentifierNode;
-  params: VarDecNode[];
-  body?: ScopeNode;
-  returns?: TypeNode;
-  tags: TagNode[];
-}
+  export class FunctionDec extends Declaration {
+    name: Identifier;
+    params: VarDec[];
+    body: Scope;
+    returns?: Type;
+    tags: Tag[];
+  }
 
-export class TagNode extends Node {
-  name: string;
-}
+  export class Tag extends Node {
+    name: string;
+  }
 
-export class ScopeNode extends Node {
-  statements: StatementNode[];
-}
+  export class Scope extends Node {
+    statements: Statement[];
+  }
 
-export class VarDecNode extends DeclarationNode {
-  left: IdentifierNode;
-  type?: TypeNode;
-  init?: ExprNode;
-}
+  export class VarDec extends Declaration {
+    left: Identifier;
+    type?: Type;
+    init?: Expr;
+  }
 
-export class EnumDecNode extends DeclarationNode {
-  name: IdentifierNode;
-  entries: EnumEntryNode[];
-}
+  export class EnumDec extends Declaration {
+    name: Identifier;
+    entries: EnumEntry[];
+  }
 
-export class StructDecNode extends DeclarationNode {
-  name: IdentifierNode;
-  declarations: DeclarationNode[];
-  templateParams: VarDecNode[];
-}
+  export class StructDec extends Declaration {
+    name: Identifier;
+    declarations: VarDec[];
+    templateParams: VarDec[];
+  }
 
-export class EnumEntryNode extends Node {
-  name: IdentifierNode;
-  value: any;
-}
+  export class EnumEntry extends Node {
+    name: Identifier;
+    value: any;
+  }
 
-export class TypeNode extends Node {}
+  export class Type extends Node {}
 
-export class PlainTypeNode extends TypeNode {
-  name: string;
-  templateParams: (TypeNode | ExprNode)[];
-}
+  export class PlainType extends Type {
+    name: string;
+    templateParams: (Type | Expr)[];
+  }
 
-export class RefTypeNode extends TypeNode {
-  type: TypeNode;
-}
+  export class RefType extends Type {
+    type: Type;
+  }
 
-export class FunctionPtrTypeNode extends TypeNode {
-  params: VarDecNode[];
-  returns: TypeNode;
-}
+  export class FunctionPtrType extends Type {
+    params: VarDec[];
+    returns: Type;
+  }
 
-export class ProgramNode extends Node {
-  declarations: DeclarationNode[];
-}
+  export class Program extends Node {
+    declarations: Declaration[];
+  }
 
-export class InheritNode extends DeclarationNode {
-  class: TypeNode;
-}
-
-export class AliasDecNode extends DeclarationNode {
-  left: IdentifierNode;
-  templateParams: VarDecNode[];
-  alias: TypeNode;
+  export class AliasDec extends Declaration {
+    left: Identifier;
+    templateParams: VarDec[];
+    alias: Type;
+  }
 }

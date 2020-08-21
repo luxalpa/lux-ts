@@ -70,7 +70,7 @@ behaviorFnDef
     ;
 
 fnDef
-    : fnType fnReturnType? scope?
+    : fnType fnReturnType? scope
     ;
 
 scope
@@ -138,9 +138,9 @@ tmplParam
     ;
 
 varDef
-    : id=ID ':' '=' expr                  # varDefAssignImplicit
-    | ID ':' vtype                        # varDefOnly
-    | ID ':' vtype '=' expr               # varDefAssignExplicit
+    : ID ':' '=' expr
+    | ID ':' vtype
+    | ID ':' vtype '=' expr
     ;
 
 expr : left=expr '.' right=ID              # memberExpr

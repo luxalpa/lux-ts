@@ -1,110 +1,26 @@
-import * as ast from "./ast";
-import { InfixOperator } from "./ast";
+import { ast } from "./ast";
 import * as ESTree from "estree";
 import * as types from "./typenodes";
-import { create, getFromTypemap } from "./util";
-import { FunctionOverloadInfo } from "./typechecker";
-
-class ClassInfo {
-  astNode: ast.StructDecNode;
-  memberVars: ast.VarDecNode[];
-  methods: ast.FunctionDecNode[];
-}
+import { getFromTypemap } from "./util";
 
 export class Transpiler {
-  structMap: Map<types.Struct, ClassInfo>;
-  functionNameMap: Map<types.Function, string>;
+  functionNameMap = new Map<types.Function, string>();
+  functionNamesUsed = new Set<string>();
 
-  constructor(
-    private typemap: Map<ast.Node, types.TypeNode>,
-    private usedClasses: ast.StructDecNode[],
-    fnOverloads: FunctionOverloadInfo[]
-  ) {
-    this.buildClassMap();
-    this.functionNameMap = buildFunctionOverloadMap(fnOverloads);
-  }
+  constructor(private typemap: Map<ast.Node, types.TypeNode>) {}
 
-  buildClassMap() {
-    this.structMap = new Map<types.Struct, ClassInfo>();
-
-    for (let dec of this.usedClasses) {
-      let classInfo = create(ClassInfo, {
-        astNode: dec,
-        memberVars: [],
-        methods: []
-      });
-
-      this.structMap.set(
-        getFromTypemap(this.typemap, dec) as types.Struct,
-        classInfo
-      );
-    }
-
-    for (let classInfo of this.structMap.values()) {
-      let processedFunctions: types.Function[] = [];
-
-      for (let dec of this.getAllDeclarations(classInfo.astNode)) {
-        if (dec instanceof ast.VarDecNode) {
-          classInfo.memberVars.push(dec);
-        } else if (dec instanceof ast.FunctionDecNode) {
-          let d = <ast.FunctionDecNode>dec;
-          let fnType = getFromTypemap(this.typemap, d) as types.Function;
-
-          let idx = processedFunctions.findIndex(fn => {
-            if (
-              fnType.isStatic !== fn.isStatic ||
-              fnType.returns !== fn.returns ||
-              fn.name !== fnType.name ||
-              fn.parameters.length !== fnType.parameters.length
-            ) {
-              return false;
-            }
-
-            for (let i = 0; i < fnType.parameters.length; i++) {
-              if (fnType.parameters[i] !== fn.parameters[i]) {
-                return false;
-              }
-            }
-
-            return true;
-          });
-
-          if (idx === -1) {
-            processedFunctions.push(fnType);
-            classInfo.methods.push(dec);
-          }
-        } else if (!(dec instanceof ast.InheritNode)) {
-          throw new Error(
-            `Class Declaration Node ${dec.constructor.name} not implemented`
-          );
-        }
-      }
-    }
-  }
-
-  transpile(program: ast.ProgramNode): ESTree.Program {
+  transpile(program: ast.Program): ESTree.Program {
     let stmts: ESTree.Statement[] = [];
     for (let declaration of program.declarations) {
-      if (declaration instanceof ast.StructDecNode) {
+      if (declaration instanceof ast.StructDec) {
         // These are being done separately
         continue;
       }
 
-      if (declaration instanceof ast.AliasDecNode) {
+      if (declaration instanceof ast.AliasDec) {
         continue;
       }
 
-      let s = this.visit(declaration);
-      if (Array.isArray(s)) {
-        for (let x of s) {
-          stmts.push(x);
-        }
-      } else {
-        stmts.push(s);
-      }
-    }
-
-    for (let declaration of this.usedClasses) {
       let s = this.visit(declaration);
       if (Array.isArray(s)) {
         for (let x of s) {
@@ -138,7 +54,28 @@ export class Transpiler {
     return fn.call(this, n);
   }
 
-  visitVarDecNode(e: ast.VarDecNode): ESTree.VariableDeclaration {
+  uniqueFunctionName(t: types.Function, suggestedName: string = ""): string {
+    if (suggestedName === "") {
+      suggestedName = suggestFunctionName(t);
+    }
+    const cached = this.functionNameMap.get(t);
+    if (cached) {
+      return cached;
+    }
+    const originalSuggestedName = suggestedName;
+
+    let i = 1;
+    while (this.functionNamesUsed.has(suggestedName)) {
+      suggestedName = `${originalSuggestedName}_${i}`;
+      i++;
+    }
+
+    this.functionNamesUsed.add(suggestedName);
+    this.functionNameMap.set(t, suggestedName);
+    return suggestedName;
+  }
+
+  visitVarDec(e: ast.VarDec): ESTree.VariableDeclaration {
     return {
       declarations: [
         {
@@ -155,9 +92,17 @@ export class Transpiler {
     };
   }
 
-  visitFunctionDecNode(e: ast.FunctionDecNode): ESTree.FunctionDeclaration {
-    const fn = getFromTypemap(this.typemap, e) as types.Function;
-    const name = this.functionNameMap.get(fn) || e.name.name;
+  visitFunctionDec(e: ast.FunctionDec): ESTree.FunctionDeclaration {
+    const fn = getFromTypemap<types.Function>(this.typemap, e);
+    const name = this.uniqueFunctionName(fn);
+
+    let params: ESTree.Pattern[] = e.params.map(param => ({
+      type: "Identifier",
+      name: param.left.name
+    }));
+    if (fn.belongsTo) {
+      params = [{ type: "Identifier", name: "__self" }, ...params];
+    }
 
     return {
       type: "FunctionDeclaration",
@@ -166,35 +111,21 @@ export class Transpiler {
         name
       },
       body: this.visit(e.body),
-      params: e.params.map(param => ({
-        type: "Identifier",
-        name: param.left.name
-      }))
+      params
     };
   }
 
-  makeFunctionExpression(e: ast.FunctionDecNode): ESTree.FunctionExpression {
-    return {
-      type: "FunctionExpression",
-      body: this.visit(e.body),
-      params: e.params.map(param => ({
-        type: "Identifier",
-        name: param.left.name
-      }))
-    };
-  }
-
-  visitScopeNode(e: ast.ScopeNode): ESTree.BlockStatement {
+  visitScope(e: ast.Scope): ESTree.BlockStatement {
     return {
       type: "BlockStatement",
       body: e.statements.map(statement => this.visit(statement))
     };
   }
 
-  visitInfixExprNode(e: ast.InfixExprNode): ESTree.BinaryExpression {
+  visitInfixExpr(e: ast.InfixExpr): ESTree.BinaryExpression {
     let op: ESTree.BinaryOperator;
     switch (e.operator) {
-      case InfixOperator.Equals:
+      case ast.InfixOperator.Equals:
         op = "==";
         break;
       default:
@@ -210,26 +141,25 @@ export class Transpiler {
     };
   }
 
-  visitNumberNode(e: ast.NumberNode): ESTree.SimpleLiteral {
+  visitNumber(e: ast.Number): ESTree.SimpleLiteral {
     return {
       type: "Literal",
       value: e.value
     };
   }
 
-  visitIdentifierExprNode(e: ast.IdentifierExprNode): ESTree.Identifier {
+  visitIdentifierExpr(e: ast.IdentifierExpr): ESTree.Identifier {
     const fn = getFromTypemap(this.typemap, e);
     if (fn instanceof types.Function) {
       return {
         type: "Identifier",
-        name: this.functionNameMap.get(fn) || e.id.name
+        name: this.uniqueFunctionName(fn)
       };
     }
-    console.log();
     return this.visit(e.id);
   }
 
-  visitRefExprNode(e: ast.RefExprNode): ESTree.Expression {
+  visitRefExpr(e: ast.RefExpr): ESTree.Expression {
     const t = getFromTypemap(this.typemap, e.expr);
 
     if (t instanceof types.Struct || t instanceof types.Function) {
@@ -246,7 +176,7 @@ export class Transpiler {
     };
   }
 
-  visitDerefExprNode(e: ast.DerefExprNode): ESTree.Expression {
+  visitDerefExpr(e: ast.DerefExpr): ESTree.Expression {
     const t = getFromTypemap(this.typemap, e);
     if (t instanceof types.Struct) {
       return this.visit(e.expr);
@@ -258,9 +188,22 @@ export class Transpiler {
     };
   }
 
-  visitFunctionCallExprNode(
-    e: ast.FunctionCallExprNode
-  ): ESTree.SimpleCallExpression {
+  visitFunctionCallExpr(e: ast.FunctionCallExpr): ESTree.SimpleCallExpression {
+    if (e.fn instanceof ast.MemberExpr) {
+      const fnType = getFromTypemap<types.Function>(this.typemap, e.fn);
+      return {
+        type: "CallExpression",
+        callee: {
+          type: "Identifier",
+          name: this.uniqueFunctionName(fnType)
+        },
+        arguments: [
+          this.visit(e.fn.object),
+          ...e.params.map(param => this.visit(param))
+        ]
+      };
+    }
+
     return {
       type: "CallExpression",
       callee: this.visit(e.fn),
@@ -268,7 +211,7 @@ export class Transpiler {
     };
   }
 
-  visitMemberExprNode(e: ast.MemberExprNode): ESTree.MemberExpression {
+  visitMemberExpr(e: ast.MemberExpr): ESTree.MemberExpression {
     return {
       type: "MemberExpression",
       object: this.visit(e.object),
@@ -280,15 +223,15 @@ export class Transpiler {
     };
   }
 
-  visitIdentifierNode(e: ast.IdentifierNode): ESTree.Identifier {
+  visitIdentifier(e: ast.Identifier): ESTree.Identifier {
     return {
       type: "Identifier",
-      name: e.name
+      name: e.name === "this" ? "__self" : e.name
     };
   }
 
-  visitAssignmentStatementNode(
-    e: ast.AssignmentStatementNode
+  visitAssignmentStatement(
+    e: ast.AssignmentStatement
   ): ESTree.ExpressionStatement {
     return {
       type: "ExpressionStatement",
@@ -301,7 +244,7 @@ export class Transpiler {
     };
   }
 
-  visitEnumDecNode(e: ast.EnumDecNode): ESTree.VariableDeclaration {
+  visitEnumDec(e: ast.EnumDec): ESTree.VariableDeclaration {
     return {
       type: "VariableDeclaration",
       kind: "const",
@@ -321,16 +264,14 @@ export class Transpiler {
     };
   }
 
-  visitFunctionCallStmtNode(
-    e: ast.FunctionCallStmtNode
-  ): ESTree.ExpressionStatement {
+  visitFunctionCallStmt(e: ast.FunctionCallStmt): ESTree.ExpressionStatement {
     return {
       type: "ExpressionStatement",
       expression: this.visit(e.fnCall)
     };
   }
 
-  visitIfStatementNode(e: ast.IfStatementNode): ESTree.IfStatement {
+  visitIfStatement(e: ast.IfStatement): ESTree.IfStatement {
     return {
       type: "IfStatement",
       test: this.visit(e.condition),
@@ -338,20 +279,18 @@ export class Transpiler {
     };
   }
 
-  visitForStatementNode(e: ast.ForStatementNode): ESTree.ForStatement {
+  visitForStatement(e: ast.ForStatement): ESTree.ForStatement {
     return {
       type: "ForStatement",
       body: this.visit(e.scope)
     };
   }
 
-  visitForExprStatementNode(e: ast.ForExprStatementNode): ESTree.ForStatement {
+  visitForExprStatement(e: ast.ForExprStatement): ESTree.ForStatement {
     return this.makeForStatement(e.scope!, e.expr);
   }
 
-  visitForVarDefStatementNode(
-    e: ast.ForVarDefStatementNode
-  ): ESTree.ForStatement {
+  visitForVarDefStatement(e: ast.ForVarDefStatement): ESTree.ForStatement {
     return this.makeForStatement(
       e.scope!,
       e.expr,
@@ -375,8 +314,8 @@ export class Transpiler {
   }
 
   makeForStatement(
-    body: ast.ScopeNode,
-    expr: ast.ExprNode,
+    body: ast.Scope,
+    expr: ast.Expr,
     optAssign?: ESTree.AssignmentExpression,
     optDeclaration?: ESTree.VariableDeclarator
   ): ESTree.ForStatement {
@@ -461,13 +400,13 @@ export class Transpiler {
     };
   }
 
-  visitBreakStatementNode(e: ast.BreakStatementNode): ESTree.BreakStatement {
+  visitBreakStatement(e: ast.BreakStatement): ESTree.BreakStatement {
     return {
       type: "BreakStatement"
     };
   }
 
-  visitEnumEntryNode(e: ast.EnumEntryNode): ESTree.Property {
+  visitEnumEntry(e: ast.EnumEntry): ESTree.Property {
     return {
       type: "Property",
       key: this.visit(e.name),
@@ -482,185 +421,122 @@ export class Transpiler {
     };
   }
 
-  visitReturnStatementNode(e: ast.ReturnStatementNode): ESTree.ReturnStatement {
+  visitReturnStatement(e: ast.ReturnStatement): ESTree.ReturnStatement {
     return {
       type: "ReturnStatement",
       argument: e.expr && this.visit(e.expr)
     };
   }
 
-  visitObjectConstructionExprNode(
-    e: ast.ObjectConstructionExprNode
-  ): ESTree.NewExpression {
-    let obj: types.Struct = getFromTypemap(this.typemap, e) as types.Struct;
+  visitObjectConstructionExpr(
+    e: ast.ObjectConstructionExpr
+  ): ESTree.ObjectExpression {
+    let obj: types.Struct = getFromTypemap<types.Struct>(this.typemap, e);
 
-    let args: ESTree.Expression[] = <ESTree.Expression[]>(
-      this.structMap.get(obj)!.memberVars.map(dec => {
-        let t = e.entries.get(dec.left.name);
-        if (!t) {
-          return {
-            type: "Identifier",
-            name: "null"
-          };
+    const properties = [...obj.fields.entries()].map<ESTree.Property>(
+      ([name, type]) => {
+        const value = e.entries.get(name);
+        let expr: ESTree.Expression;
+
+        if (!value) {
+          expr = defaultValueForType(type);
+        } else {
+          expr = this.visit(value);
         }
-        return this.visit(t);
-      })
+
+        return {
+          type: "Property",
+          method: false,
+          computed: false,
+          shorthand: false,
+          key: {
+            type: "Identifier",
+            name
+          },
+          value: expr,
+          kind: "init"
+        };
+      }
     );
 
     return {
-      type: "NewExpression",
-      callee: {
-        type: "Identifier",
-        name: obj.name
-      },
-      arguments: args
+      type: "ObjectExpression",
+      properties
     };
   }
 
-  visitStructDecNode(e: ast.StructDecNode) {
-    let params: ESTree.Identifier[] = [];
-    let assignments: ESTree.Statement[] = [];
-    let stmts: ESTree.Statement[] = [];
-
-    let processedFunctions: types.Function[] = [];
-
-    let cl = getFromTypemap(this.typemap, e) as types.Struct;
-
-    if (cl.abstract) {
-      return [];
-    }
-
-    let classInfo = this.structMap.get(cl)!;
-
-    for (let dec of classInfo.memberVars) {
-      let { param, stmt } = createConstrAssign((<ast.VarDecNode>dec).left.name);
-      params.push(param);
-      assignments.push(stmt);
-    }
-
-    for (let dec of classInfo.methods) {
-      if (!dec.body) {
-        throw new Error(
-          `Function ${e.name.name}.${dec.name.name} missing body`
-        );
-      }
-      let fn = this.makeFunctionExpression(dec);
-      let fnType = getFromTypemap(this.typemap, dec) as types.Function;
-      let st = createConstrFn(
-        e.name.name,
-        fnType.isStatic,
-        this.visit(dec.name),
-        fn
-      );
-      stmts.push(st);
-    }
-
-    return [
-      {
-        type: "FunctionDeclaration",
-        id: this.visit(e.name),
-        body: {
-          type: "BlockStatement",
-          body: assignments
-        },
-        params: params
-      },
-      ...stmts
-    ];
+  visitStructDec(e: ast.StructDec) {
+    return [];
   }
 
-  *getAllDeclarations(
-    e: ast.StructDecNode
-  ): IterableIterator<ast.DeclarationNode> {
-    for (let dec of e.declarations) {
-      yield dec;
-    }
-    let c = <types.Struct>getFromTypemap(this.typemap, e);
-    for (let inherit of c.inherits) {
-      yield* this.getAllDeclarations(this.structMap.get(inherit)!.astNode);
-    }
+  visitBehavior(e: ast.Behavior) {
+    return e.functions.map(fn => this.visit(fn));
   }
 }
 
-function createConstrFn(
-  typename: string,
-  isStatic: boolean,
-  name: ESTree.Identifier,
-  fn: ESTree.FunctionExpression
-): ESTree.ExpressionStatement {
-  let filler: ESTree.Expression = isStatic
-    ? name
-    : {
-        type: "MemberExpression",
-        object: {
-          type: "Identifier",
-          name: "prototype"
-        },
-        property: name,
-        computed: false
-      };
-
-  return {
-    type: "ExpressionStatement",
-    expression: {
-      type: "AssignmentExpression",
-      operator: "=",
-      left: {
-        type: "MemberExpression",
-        object: {
-          type: "Identifier",
-          name: typename
-        },
-        property: filler,
-        computed: false
-      },
-      right: fn
-    }
-  };
-}
-
-function createConstrAssign(
-  name: string
-): { param: ESTree.Identifier; stmt: ESTree.ExpressionStatement } {
-  let param: ESTree.Identifier = {
-    type: "Identifier",
-    name
-  };
-  let stmt: ESTree.ExpressionStatement = {
-    type: "ExpressionStatement",
-    expression: {
-      type: "AssignmentExpression",
-      operator: "=",
-      left: {
-        type: "MemberExpression",
-        object: {
-          type: "ThisExpression"
-        },
-        property: {
-          type: "Identifier",
-          name
-        },
-        computed: false
-      },
-      right: {
+function defaultValueForType(t: types.TypeNode): ESTree.Expression {
+  // TODO: Implement for all kinds of types
+  switch (t.constructor) {
+    case types.Boolean:
+      return {
         type: "Identifier",
-        name
-      }
-    }
-  };
-  return { param, stmt };
+        name: "false"
+      };
+    case types.Integer:
+      return {
+        type: "Literal",
+        value: 0
+      };
+    case types.RefType:
+      return {
+        type: "Literal",
+        value: null
+      };
+    case types.Struct:
+      return {
+        type: "ObjectExpression",
+        properties: [...(t as types.Struct).fields.entries()].map(
+          ([name, type]) => ({
+            type: "Property",
+            kind: "init",
+            key: {
+              type: "Identifier",
+              name
+            },
+            shorthand: false,
+            computed: false,
+            method: false,
+            value: defaultValueForType(type)
+          })
+        )
+      };
+    default:
+      return {
+        type: "Literal",
+        value: null
+      };
+  }
 }
 
-function buildFunctionOverloadMap(
-  infos: FunctionOverloadInfo[]
-): Map<types.Function, string> {
-  const m = new Map<types.Function, string>();
-
-  for (const info of infos) {
-    for (let i = 0; i < info.fns.length; i++) {
-      m.set(info.fns[i], info.name + "$" + i);
-    }
+function suggestFunctionName(t: types.Function): string {
+  // TODO: Namespacing
+  if (t.belongsTo) {
+    return `${getTypeName(t.belongsTo)}$${t.name}`;
   }
+  return t.name;
+}
 
-  return m;
+function getTypeName(t: types.TypeNode): string {
+  switch (t.constructor) {
+    case types.Boolean:
+      return "bool";
+    case types.Integer:
+      return "int";
+    case types.RefType:
+      return "ref" + getTypeName((t as types.RefType).ref);
+    case types.Struct:
+      return (t as types.Struct).name;
+    default:
+      return "unk";
+  }
 }

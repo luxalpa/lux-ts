@@ -1,4 +1,8 @@
 - Implement Void Type
+- Support Function Pointer call expr
+- implement templates for behaviors
+- find out how to do type aliases
+
 - Support `x := &50`
 - Test order of operands
 - Support `&v == &v` by storing the pointer in a temporary when necessary (only 1 per context), and for fields use global registry

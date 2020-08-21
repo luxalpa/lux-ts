@@ -1,76 +1,23 @@
 
+struct OtherStruct {
+    name: Integer
+    isObj: Boolean
+}
+
 struct MyStruct {
     age: Integer
+    name: Integer
+    str: OtherStruct
 }
 
 behavior MyStruct {
-    run() => Void {
+    run() => {
         log(this.age)
     }
 }
 
 function main() => {
-    myFn(10)
     obj := <MyStruct age=255 />
+    obj.run()
     log(obj.age)
 }
-
-function myFn(x: Integer) => {
-    log(10)
-}
-
-function myFn(x: Boolean) => {
-    log(5)
-}
-
-/*main: () => {
-    fn: &() => Integer = &example
-
-    for i := range(3, 5) {
-        console.log(i)
-    }
-}
-
-example: () => Integer {
-    return 100
-}
-
-Dragon<T: Type>: class {
-    name: &T
-}
-
-Phoenix<T: Type>: alias Dragon<T>
-
-Iterator<T: Type>: class {
-    next: () => T
-    atEnd: () => Boolean
-}
-
-IEnumerable<T: Type>: class {
-    begin: () => Iterator<T>
-}
-
-Counter: class {
-    inherit Iterator<Integer>
-
-    currentValue: Integer
-    max: Integer
-
-    next: () => Integer {
-        ret := this.currentValue
-        this.currentValue = this.currentValue + 1
-        return ret
-    }
-
-    atEnd: () => Boolean {
-        return this.currentValue = this.max+2
-    }
-
-    @static create: () => Counter {
-        return [currentValue: 0, max: 10]
-    }
-}
-
-range: (min: Integer, max: Integer) => Counter {
-    return [currentValue: min, max: max]
-}*/

@@ -42,6 +42,11 @@ abbrev@1:
   resolved "https://registry.yarnpkg.com/abbrev/-/abbrev-1.1.1.tgz#f8f2c887ad10bf67f634f005b6987fed3179aac8"
   integrity sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==
 
+acorn@^8.0.1:
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/acorn/-/acorn-8.0.1.tgz#d7e8eca9b71d5840db0e7e415b3b2b20e250f938"
+  integrity sha512-dmKn4pqZ29iQl2Pvze1zTrps2luvls2PBY//neO2WJ0s10B3AxJXshN+Ph7B4GrhfGhHXrl4dnUwyNNXQcnWGQ==
+
 ansi-align@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/ansi-align/-/ansi-align-2.0.0.tgz#c36aeccba563b89ceb556f3690f0b1d9e3547f7f"

@@ -1,62 +1,150 @@
-import * as ast from "./ast";
+import { ast } from "./ast";
 import * as types from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import cloneDeep from "lodash.clonedeep";
 
-export interface FunctionOverloadInfo {
-  fns: types.Function[];
-  name: string;
+interface ResolvedFunctionInfo {
+  context: types.Context;
+  fnType: types.Function;
+  body: ast.Scope;
 }
 
 export class TypeChecker {
-  constructor(private tree: ast.ProgramNode) {}
+  typemap: TypeMap;
+  behaviorMap: Map<types.TypeNode, Map<types.Trait, types.Function[]>>;
+  constructor(private tree: ast.Program) {}
 
   check(): {
     typemap: TypeMap;
-    // Contains all the resolved classes for the Transpiler to generate.
-    usedClasses: ast.StructDecNode[];
-    fnOverloadInfos: FunctionOverloadInfo[];
   } {
-    let typemap = new Map<ast.Node, types.TypeNode>();
-    let typeResolver = new TypeResolver(this.tree, typemap);
-    let mainCtx = typeResolver.check();
+    this.typemap = new Map<ast.Node, types.TypeNode>();
+    this.behaviorMap = new Map();
 
+    const mainCtx = new types.Context();
     this.addExternals(mainCtx);
-    for (let fn of typeResolver.functions) {
+
+    const mainScope = {
+      body: {
+        statements: this.tree.declarations
+      },
+      context: mainCtx
+    };
+
+    const resolvedFunctions = [mainScope, ...this.resolve(mainCtx)];
+
+    for (let fn of resolvedFunctions) {
       for (let stmt of fn.body.statements) {
-        this.visit(stmt, fn.context, typemap);
+        this.visit(stmt, fn.context);
       }
     }
 
     return {
-      typemap,
-      usedClasses: typeResolver.usedStructs,
-      fnOverloadInfos: findOverloadedFunctions(typemap, this.tree)
+      typemap: this.typemap
+    };
+  }
+
+  addBehaviorFn(type: types.TypeNode, trait: types.Trait, fn: types.Function) {}
+
+  // Resolve does a first run over the code in order to register all globally accessible names.
+  resolve(context: types.Context): ResolvedFunctionInfo[] {
+    const behaviors = new Array<ast.Behavior>();
+    const functions = new Array<ast.FunctionDec>();
+    const resolvedFunctions = new Array<ResolvedFunctionInfo>();
+
+    // First we parse the Structs, Enums and Aliases to get the type names
+    for (const n of this.tree.declarations) {
+      if (n instanceof ast.StructDec) {
+        context.addType(
+          n.name.name,
+          new types.StructFactory(this, n, context, this.typemap)
+        );
+      } else if (n instanceof ast.EnumDec) {
+        context.addType(
+          n.name.name,
+          create(types.Enum, {
+            name: n.name.name,
+            internalType: context.getTypeByString("Integer"),
+            members: n.entries.map(v => v.name.name),
+            typeMethods: new types.TypeMethods()
+          })
+        );
+      } else if (n instanceof ast.AliasDec) {
+        throw new Error("Aliases not implemented");
+      }
+      // We do the Behaviors and Functions later
+      else if (n instanceof ast.Behavior) {
+        behaviors.push(n);
+      } else if (n instanceof ast.FunctionDec) {
+        functions.push(n);
+      }
+    }
+
+    for (const behavior of behaviors) {
+      for (const fn of behavior.functions) {
+        const resolvedFn = this.parseFunctionDecNode(
+          fn,
+          context,
+          context.getType(behavior.type),
+          types.NoTrait
+        );
+        resolvedFunctions.push(resolvedFn);
+      }
+    }
+
+    for (const fn of functions) {
+      resolvedFunctions.push(this.parseFunctionDecNode(fn, context));
+    }
+
+    return resolvedFunctions;
+  }
+
+  parseFunctionDecNode(
+    n: ast.FunctionDec,
+    parentContext: types.Context,
+    behaviorTarget?: types.TypeNode,
+    behaviorTrait: types.Trait = types.NoTrait
+  ): ResolvedFunctionInfo {
+    let context = parentContext.addSubContext();
+    n.params.forEach(value => this.visit(value, context));
+    let isStatic = false;
+    for (let tag of n.tags) {
+      if (tag.name == "static") {
+        isStatic = true;
+      }
+    }
+
+    let fnType = create(types.Function, {
+      name: n.name.name,
+      parameters: n.params.map(value => {
+        return parentContext.getType(value.type!);
+      }),
+      returns: n.returns ? parentContext.getType(n.returns) : null,
+      isStatic,
+      typeMethods: new types.TypeMethods(),
+      belongsTo: behaviorTarget
+    });
+
+    context.owner = fnType;
+
+    if (behaviorTarget) {
+      if (!isStatic) {
+        context.addVariable("this", behaviorTarget);
+      }
+
+      behaviorTarget.typeMethods.addMethod(behaviorTrait, fnType);
+    }
+
+    this.typemap.set(n, fnType);
+    return {
+      context: context,
+      fnType,
+      body: n.body!
     };
   }
 
   addExternals(context: types.Context) {
-    // let cc = new types.Context();
-    // cc.addVariable(
-    //   "log",
-    //   create(types.Function, {
-    //     name: "log",
-    //     parameters: [context.getTypeByString("Integer")],
-    //     isStatic: false,
-    //     returns: null
-    //   })
-    // );
-    // cc.addVariable(
-    //   "log",
-    //   create(types.Function, {
-    //     name: "log",
-    //     parameters: [context.getTypeByString("Boolean")],
-    //     isStatic: false,
-    //     returns: null
-    //   })
-    // );
-    //
-    // context.addVariable("console", new types.Class("console", cc));
+    context.addType("Integer", new types.Integer());
+    context.addType("Boolean", new types.Boolean());
 
     context.addVariable(
       "log",
@@ -64,16 +152,8 @@ export class TypeChecker {
         name: "log",
         parameters: [context.getTypeByString("Integer")],
         isStatic: false,
-        returns: null
-      })
-    );
-    context.addVariable(
-      "log",
-      create(types.Function, {
-        name: "log",
-        parameters: [context.getTypeByString("Boolean")],
-        isStatic: false,
-        returns: null
+        returns: null,
+        typeMethods: new types.TypeMethods()
       })
     );
 
@@ -81,232 +161,180 @@ export class TypeChecker {
     context.addVariable("true", context.getTypeByString("Boolean"));
   }
 
-  visit(n: ast.Node, context: types.Context, typemap: TypeMap) {
+  visit(n: ast.Node, context: types.Context) {
     if (!n) {
       throw new Error("visit: Node to visit is undefined");
     }
     if (n.constructor.name == "Object") {
       throw new Error(`Object without type: (${JSON.stringify(n)})`);
     }
+
+    if (
+      n instanceof ast.AliasDec ||
+      n instanceof ast.FunctionDec ||
+      n instanceof ast.EnumDec ||
+      n instanceof ast.StructDec ||
+      n instanceof ast.Behavior
+    ) {
+      return;
+    }
+
     let fn = this[("visit" + n.constructor.name) as keyof TypeChecker] as (
       n: ast.Node,
-      context: types.Context,
-      typemap: TypeMap
+      context: types.Context
     ) => any;
     if (!fn) {
       throw new Error(`TypeChecker: ${n.constructor.name} is unimplemented!`);
     }
-    return fn.call(this, n, context, typemap);
+    return fn.call(this, n, context);
   }
 
-  visitVarDecNode(n: ast.VarDecNode, context: types.Context, typemap: TypeMap) {
+  visitVarDec(n: ast.VarDec, context: types.Context, struct?: types.Struct) {
     let type: types.TypeNode;
 
     if (n.init) {
-      this.visit(n.init, context, typemap);
+      this.visit(n.init, context);
     }
 
     if (n.type) {
       type = context.getType(n.type);
       if (n.init) {
-        let t = getFromTypemap(typemap, n.init)!;
+        let t = getFromTypemap(this.typemap, n.init)!;
         if (!isTypeEqual(type, t)) {
           console.log(type, t);
           throw new Error("type mismatch!");
         }
       }
     } else {
-      type = getFromTypemap(typemap, n.init!)!;
+      type = getFromTypemap(this.typemap, n.init!)!;
     }
-    context.addVariable(n.left.name, type);
+    if (struct) {
+      if (struct.fields.has(n.left.name)) {
+        throw new Error("Field in struct is already defined");
+      }
+      struct.fields.set(n.left.name, type);
+    } else {
+      context.addVariable(n.left.name, type);
+    }
   }
 
-  visitFunctionCallStmtNode(
-    n: ast.FunctionCallStmtNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.fnCall, context, typemap);
+  visitFunctionCallStmt(n: ast.FunctionCallStmt, context: types.Context) {
+    this.visit(n.fnCall, context);
   }
 
-  visitFunctionCallExprNode(
-    n: ast.FunctionCallExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.fn, context, typemap);
-    const resolvableType = typemap.get(n.fn)!;
-    if (!(resolvableType instanceof types.ResolvableType)) {
-      console.error(resolvableType);
-      throw new Error("Did not find Resolvable");
-    }
-    const overloadedFns = resolvableType.resolved;
-    if (!(overloadedFns instanceof types.OverloadedFunction)) {
-      console.error(overloadedFns);
+  visitFunctionCallExpr(n: ast.FunctionCallExpr, context: types.Context) {
+    this.visit(n.fn, context);
+    const fnType = this.typemap.get(n.fn)!;
+    if (!(fnType instanceof types.Function)) {
+      console.error(fnType);
       throw new Error("Function Call on non-function");
     }
-    n.params.forEach(value => {
-      this.visit(value, context, typemap);
-    });
-    outerLoop: for (const fn of overloadedFns.functions) {
-      if (fn.parameters.length !== n.params.length) {
-        continue;
-      }
-      for (const [i, param] of fn.parameters.entries()) {
-        if (param !== getFromTypemap(typemap, n.params[i])) {
-          continue outerLoop;
-        }
-      }
-      typemap.set(n, fn.returns!);
-      resolvableType.resolved = fn;
-      return;
+    for (const value of n.params) {
+      this.visit(value, context);
     }
 
-    throw new Error(`No function overload found.`);
+    this.typemap.set(n, fnType.returns!);
   }
 
-  visitMemberExprNode(
-    n: ast.MemberExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.object, context, typemap);
-    let t: types.TypeNode = getFromTypemap(typemap, n.object) as types.Struct;
-    if (t.constructor !== types.Struct) {
-      if (t.constructor === types.MetaType) {
-        let v = (t as types.MetaType).type;
-        switch (v.constructor) {
-          case types.Enum: {
-            let e = v as types.Enum;
-            if (!e.members.includes(n.property)) {
-              throw `Property ${n.property} not found on Enum ${e.name}`;
-            }
-            typemap.set(n, e);
-            return;
-          }
-          case types.Struct: {
-            let c = v as types.Struct;
-            let overloadedFns = c.getMember(n.property);
-
-            if (!(overloadedFns instanceof types.OverloadedFunction)) {
-              throw new Error(
-                "Need a function, but got " + overloadedFns.constructor.name
-              );
-            }
-
-            const staticFns = overloadedFns.functions.filter(fn => fn.isStatic);
-            if (staticFns.length === 0) {
-              throw new Error("Need a static function!");
-            }
-
-            typemap.set(
-              n,
-              new types.ResolvableType(
-                create(types.OverloadedFunction, {
-                  functions: staticFns
-                })
-              )
-            );
-            return;
-          }
-          default: {
-            throw new Error(`${v.constructor.name} is not implemented`);
-          }
-        }
-      } else {
-        throw new Error(
-          `Member expression on non-class type ${t.constructor.name}`
-        );
+  visitMemberExpr(n: ast.MemberExpr, context: types.Context) {
+    this.visit(n.object, context);
+    let t: types.TypeNode = getFromTypemap(
+      this.typemap,
+      n.object
+    ) as types.Struct;
+    if (!(t instanceof types.MetaType)) {
+      const v = types.getMember(t, n.property);
+      if (!v) {
+        throw new Error(`Property ${n.property} not defined`);
       }
+      this.typemap.set(n, v);
     } else {
-      let v = (t as types.Struct).getMember(n.property);
-      typemap.set(n, v);
+      if (t.type instanceof types.Enum) {
+        const e = t.type;
+        if (!e.members.includes(n.property)) {
+          throw `Property ${n.property} not found on Enum ${e.name}`;
+        }
+        this.typemap.set(n, e);
+        return;
+      }
+
+      // TODO: Static and namespaced calls
+
+      throw new Error(`${t.type.constructor.name} is not implemented`);
     }
   }
 
-  visitIdentifierExprNode(
-    n: ast.IdentifierExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
+  visitIdentifierExpr(n: ast.IdentifierExpr, context: types.Context) {
     let v = context.getVariable(n.id.name);
-    typemap.set(n, v);
+    this.typemap.set(n, v);
   }
 
-  visitRefExprNode(
-    n: ast.RefExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.expr, context, typemap);
+  visitRefExpr(n: ast.RefExpr, context: types.Context) {
+    this.visit(n.expr, context);
 
-    typemap.set(
+    this.typemap.set(
       n,
       create(types.RefType, {
-        ref: getFromTypemap(typemap, n.expr)
+        ref: getFromTypemap(this.typemap, n.expr),
+        typeMethods: new types.TypeMethods()
       })
     );
   }
 
-  visitDerefExprNode(
-    n: ast.RefExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.expr, context, typemap);
-    const t = getFromTypemap(typemap, n.expr);
+  visitDerefExpr(n: ast.RefExpr, context: types.Context) {
+    this.visit(n.expr, context);
+    const t = getFromTypemap(this.typemap, n.expr);
 
     if (!(t instanceof types.RefType)) {
       throw new Error("Can only dereference pointers");
     }
 
-    typemap.set(n, t.ref);
+    this.typemap.set(n, t.ref);
   }
 
-  visitNumberNode(n: ast.NumberNode, context: types.Context, typemap: TypeMap) {
-    typemap.set(n, context.getTypeByString("Integer"));
+  visitNumber(n: ast.Number, context: types.Context) {
+    this.typemap.set(n, context.getTypeByString("Integer"));
   }
 
-  visitAssignmentStatementNode(
-    n: ast.AssignmentStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.right, context, typemap);
-    this.visit(n.left, context, typemap);
-    if (getFromTypemap(typemap, n.left) !== getFromTypemap(typemap, n.right)) {
+  visitAssignmentStatement(n: ast.AssignmentStatement, context: types.Context) {
+    this.visit(n.right, context);
+    this.visit(n.left, context);
+    if (
+      getFromTypemap(this.typemap, n.left) !==
+      getFromTypemap(this.typemap, n.right)
+    ) {
       throw "Can't assign these values";
     }
   }
 
-  visitInfixExprNode(
-    n: ast.InfixExprNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.left, context, typemap);
-    this.visit(n.right, context, typemap);
-    if (getFromTypemap(typemap, n.left) !== getFromTypemap(typemap, n.right)) {
+  visitInfixExpr(n: ast.InfixExpr, context: types.Context) {
+    this.visit(n.left, context);
+    this.visit(n.right, context);
+    if (
+      getFromTypemap(this.typemap, n.left) !==
+      getFromTypemap(this.typemap, n.right)
+    ) {
       throw "Left and right value have different type";
     }
 
     switch (n.operator) {
       case ast.InfixOperator.Equals:
       case ast.InfixOperator.Unequals:
-        typemap.set(n, context.getTypeByString("Boolean"));
+        this.typemap.set(n, context.getTypeByString("Boolean"));
         break;
       default:
-        typemap.set(n, getFromTypemap(typemap, n.left)!);
+        this.typemap.set(n, getFromTypemap(this.typemap, n.left)!);
         break;
     }
   }
 
-  visitReturnStatementNode(
-    n: ast.ReturnStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    const fn = context.owner as types.Function;
+  visitReturnStatement(n: ast.ReturnStatement, context: types.Context) {
+    const fn = context.getOwner();
+
+    if (fn === null) {
+      throw new Error("Return statement must be inside function!");
+    }
+
     if (!n.expr) {
       if (fn.returns) {
         throw new Error(
@@ -314,23 +342,22 @@ export class TypeChecker {
         );
       }
     } else {
-      this.visit(n.expr, context, typemap);
+      this.visit(n.expr, context);
       if (!fn.returns) {
         throw new Error(
           `Function should not return a value, but got (${n.expr.constructor.name})`
         );
       }
 
-      if (!isTypeEqual(fn.returns, getFromTypemap(typemap, n.expr)!)) {
+      if (!isTypeEqual(fn.returns, getFromTypemap(this.typemap, n.expr)!)) {
         throw "Return value doesn't match to function";
       }
     }
   }
 
-  visitObjectConstructionExprNode(
-    n: ast.ObjectConstructionExprNode,
-    context: types.Context,
-    typemap: TypeMap
+  visitObjectConstructionExpr(
+    n: ast.ObjectConstructionExpr,
+    context: types.Context
   ) {
     const struct = context.getType(n.type);
     if (!(struct instanceof types.Struct)) {
@@ -338,122 +365,106 @@ export class TypeChecker {
     }
 
     for (let [key, value] of n.entries) {
-      this.visit(value, context, typemap);
-      let t = getFromTypemap(typemap, value)!;
-      if (!isTypeEqual(struct.getMember(key), t)) {
+      this.visit(value, context);
+      let t = getFromTypemap(this.typemap, value)!;
+      const keyType = struct.fields.get(key);
+      if (!keyType) {
+        throw new Error(`Key ${key} does not exist on ${struct.name}`);
+      }
+      if (!isTypeEqual(keyType, t)) {
         throw new Error(`Type mismatch in ${struct.name} for ${key}`);
       }
     }
 
-    typemap.set(n, struct);
+    this.typemap.set(n, struct);
   }
 
-  visitIfStatementNode(
-    n: ast.IfStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.condition, context, typemap);
+  visitIfStatement(n: ast.IfStatement, context: types.Context) {
+    this.visit(n.condition, context);
     if (
-      getFromTypemap(typemap, n.condition) !==
+      getFromTypemap(this.typemap, n.condition) !==
       (context.getTypeByString("Boolean") as types.TypeNode)
     ) {
       throw new Error("If condition must be boolean!");
     }
     let ctx = context.addSubContext();
     for (const stmt of n.scope.statements) {
-      this.visit(stmt, ctx, typemap);
+      this.visit(stmt, ctx);
     }
   }
 
-  visitForStatementNode(
-    n: ast.ForStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
+  visitForStatement(n: ast.ForStatement, context: types.Context) {
     let ctx = context.addSubContext();
     for (const stmt of n.scope!.statements) {
-      this.visit(stmt, ctx, typemap);
+      this.visit(stmt, ctx);
     }
   }
 
-  visitForExprStatementNode(
-    n: ast.ForExprStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.expr, context, typemap);
-    const t = getFromTypemap(typemap, n.expr);
-    if (!(t instanceof types.Struct)) {
-      throw new Error("For Expression needs to be a Class!");
-    }
-    let found = false;
-    for (const c of t.implementedTraits()) {
-      if (c.name === "Iterator") {
-        // TODO: Fix for namespacing
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      throw new Error("For Expression needs to be an Iterator!");
-    }
-
-    let ctx = context.addSubContext();
-    for (const stmt of n.scope!.statements) {
-      // TODO: Add visitor for scope
-      this.visit(stmt, ctx, typemap);
-    }
+  visitForExprStatement(n: ast.ForExprStatement, context: types.Context) {
+    // this.visit(n.expr, context);
+    // const t = getFromTypemap(this.typemap, n.expr);
+    // if (!(t instanceof types.Struct)) {
+    //   throw new Error("For Expression needs an iterator!");
+    // }
+    // let found = false;
+    // for (const c of t.implementedTraits()) {
+    //   if (c.name === "Iterator") {
+    //     // TODO: Fix for namespacing
+    //     found = true;
+    //     break;
+    //   }
+    // }
+    // if (!found) {
+    //   throw new Error("For Expression needs to be an Iterator!");
+    // }
+    //
+    // let ctx = context.addSubContext();
+    // for (const stmt of n.scope!.statements) {
+    //   // TODO: Add visitor for scope
+    //   this.visit(stmt, ctx);
+    // }
   }
 
-  visitForVarDefStatementNode(
-    n: ast.ForVarDefStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
-    this.visit(n.expr, context, typemap);
-    let ctx = context.addSubContext();
-
-    // Resolve the Iterators type
-    const t = getFromTypemap(typemap, n.expr);
-    if (!(t instanceof types.Struct)) {
-      throw new Error("For Expression needs to be a Class!");
-    }
-    let found = false;
-    let nextType: types.TypeNode;
-    for (const c of t.implementedTraits()) {
-      if (c.name === "Iterator") {
-        // TODO: Fix for namespacing
-        // TODO: Reimplement
-
-        // nextType = (c("next") as OverloadedFunction).functions[0]
-        //   .returns!;
-        // ctx.addVariable(n.id, nextType);
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      throw new Error("For Expression needs to be an Iterator!");
-    }
-
-    if (n.type) {
-      if (!isTypeEqual(context.getType(n.type), nextType!)) {
-        throw new Error("For Expression type does not match requested type!");
-      }
-    }
-
-    for (const stmt of n.scope!.statements) {
-      // TODO: Add visitor for scope
-      this.visit(stmt, ctx, typemap);
-    }
+  visitForVarDefStatement(n: ast.ForVarDefStatement, context: types.Context) {
+    // this.visit(n.expr, context);
+    // let ctx = context.addSubContext();
+    //
+    // // Resolve the Iterators type
+    // const t = getFromTypemap(this.typemap, n.expr);
+    // if (!(t instanceof types.Struct)) {
+    //   throw new Error("For Expression needs to be a Class!");
+    // }
+    // let found = false;
+    // let nextType: types.TypeNode;
+    // for (const c of t.implementedTraits()) {
+    //   if (c.name === "Iterator") {
+    //     // TODO: Fix for namespacing
+    //     // TODO: Reimplement
+    //
+    //     // nextType = (c("next") as OverloadedFunction).functions[0]
+    //     //   .returns!;
+    //     // ctx.addVariable(n.id, nextType);
+    //     found = true;
+    //     break;
+    //   }
+    // }
+    // if (!found) {
+    //   throw new Error("For Expression needs to be an Iterator!");
+    // }
+    //
+    // if (n.type) {
+    //   if (!isTypeEqual(context.getType(n.type), nextType!)) {
+    //     throw new Error("For Expression type does not match requested type!");
+    //   }
+    // }
+    //
+    // for (const stmt of n.scope!.statements) {
+    //   // TODO: Add visitor for scope
+    //   this.visit(stmt, ctx);
+    // }
   }
 
-  visitBreakStatementNode(
-    n: ast.BreakStatementNode,
-    context: types.Context,
-    typemap: TypeMap
-  ) {
+  visitBreakStatement(n: ast.BreakStatement, context: types.Context) {
     // Intentionally left blank.
   }
 }
@@ -468,15 +479,7 @@ export function isTypeEqual(
     return true;
   }
 
-  if (weak instanceof types.Struct) {
-    // allParentClasses also checks for the class itself
-    for (let inherited of weak.implementedTraits()) {
-      if (strong === inherited) {
-        return true;
-      }
-    }
-    return false;
-  }
+  // TODO: Implement traits
 
   if (strong instanceof types.RefType) {
     if (!(weak instanceof types.RefType)) {
@@ -491,16 +494,12 @@ export function isTypeEqual(
     if (!(weak instanceof types.RefType)) {
       return false;
     }
-    let fn: types.Function;
-    if (weak.ref instanceof types.OverloadedFunction) {
-      if (weak.ref.functions.length !== 1) {
-        // TODO: Resolve overloaded functions
-        throw new Error("TODO: Resolve weak type!");
-      }
-      fn = weak.ref.functions[0];
-    } else {
+
+    if (!(weak.ref instanceof types.Function)) {
       return false;
     }
+
+    const fn = weak.ref;
 
     if (!isTypeEqual(strong.returns!, fn.returns!)) {
       return false;
@@ -524,346 +523,41 @@ export function isTypeEqual(
   return false;
 }
 
-// export function findAllOverloadedFunctions(
-//   mainContext: types.Context
-// ): FunctionOverloadInfo[] {
-//   const infos: FunctionOverloadInfo[] = [];
-//   for (const ctx of mainContext.getAllContexts()) {
-//     const m = new Map<string, types.Function[]>();
-//     for (const v of ctx.variables) {
-//       if (!(v.type instanceof types.Function)) {
-//         continue;
-//       }
+// export class AliasFactory extends TypeNode {
+//   constructor(
+//     private typeChecker: TypeChecker,
+//     private node: ast.AliasDec,
+//     private context: types.Context
+//   ) {
+//     super();
+//   }
 //
-//       const symbol = m.get(v.name);
+//   resolve(templateParams: TemplateParams): types.TypeNode {
+//     const alias = this.node.alias;
 //
-//       if (symbol === undefined) {
-//         m.set(v.name, [v.type]);
+//     if (templateParams.length > this.node.templateParams.length) {
+//       throw new Error(
+//         "Invocation Template Params are longer than Class Template Params"
+//       );
+//     }
+//
+//     const subcontext = this.context.addSubContext();
+//
+//     for (let i = 0; i < this.node.templateParams.length; i++) {
+//       let paramDef = this.node.templateParams[i];
+//       let paramVal = templateParams[i];
+//       if (
+//         paramDef.type instanceof ast.PlainType &&
+//         paramDef.type.name === "Type"
+//       ) {
+//         subcontext.addType(paramDef.left.name, paramVal);
 //       } else {
-//         if (symbol.length == 1) {
-//           // Every element that we found more than once should eventually be returned as info.
-//           infos.push({
-//             name: v.name,
-//             fns: symbol
-//           });
-//         }
-//         symbol.push(v.type);
+//         throw new Error(
+//           "Template Params other than Type are not yet supported"
+//         );
 //       }
 //     }
+//
+//     return subcontext.getType(alias);
 //   }
-//   return infos;
 // }
-
-function findOverloadedFunctions(
-  typemap: TypeMap,
-  tree: ast.ProgramNode
-): FunctionOverloadInfo[] {
-  const globalFunctions = new Map<string, types.Function[]>();
-  for (const dec of tree.declarations) {
-    if (!(dec instanceof ast.FunctionDecNode)) {
-      continue;
-    }
-
-    let fns = globalFunctions.get(dec.name.name);
-    if (!fns) {
-      fns = [];
-      globalFunctions.set(dec.name.name, fns);
-    }
-
-    fns.push(getFromTypemap(typemap, dec) as types.Function);
-  }
-
-  return [...globalFunctions]
-    .filter(([, arr]) => arr.length > 1)
-    .map(([name, fns]) => ({
-      name,
-      fns
-    }));
-}
-
-interface FunctionCheck {
-  context: types.Context;
-  fn: types.Function;
-  body: ast.ScopeNode;
-}
-
-interface ClassCheck {
-  context: types.Context;
-  declarations: ast.DeclarationNode[];
-}
-
-class TypeResolver {
-  toBeChecked: types.SemiInferred[];
-  functions: FunctionCheck[];
-  typemap: TypeMap;
-  usedStructs: ast.StructDecNode[] = [];
-
-  constructor(private tree: ast.ProgramNode, typemap: TypeMap) {
-    this.toBeChecked = [];
-    this.functions = [];
-    this.typemap = typemap;
-  }
-
-  check(): types.Context {
-    let context = new types.Context();
-    this.addCompilerTypes(context);
-
-    let globalCheck: ClassCheck = { context, declarations: [] };
-    this.tree.declarations.forEach(n => {
-      if (n instanceof ast.StructDecNode) {
-        context.addType(
-          n.name.name,
-          new StructFactory(this, n, context, this.usedStructs, this.typemap)
-        );
-      } else if (n instanceof ast.EnumDecNode) {
-        context.addType(
-          n.name.name,
-          create(types.Enum, {
-            name: n.name.name,
-            internalType: context.getTypeByString("Integer"),
-            members: n.entries.map(v => v.name.name)
-          })
-        );
-      } else if (n instanceof ast.AliasDecNode) {
-        context.addType(n.left.name, new AliasFactory(this, n, context));
-      } else {
-        globalCheck.declarations.push(n);
-      }
-    });
-
-    for (let declaration of globalCheck.declarations) {
-      this.visit(declaration, globalCheck.context);
-    }
-
-    return context;
-  }
-
-  addCompilerTypes(context: types.Context) {
-    context.addType("Integer", new types.Integer());
-    context.addType("Boolean", new types.Boolean());
-  }
-
-  visitBehaviorNode(n: ast.BehaviorNode, context: types.Context) {
-    const t = context.getType(n.type);
-    if (!(t instanceof types.Struct)) {
-      throw new Error("Behavior only works on structs!");
-    }
-    for (let fn of n.functions) {
-      t.addMethod(types.NoTrait, this.parseFunctionDecNode(fn, context));
-    }
-  }
-
-  parseFunctionDecNode(
-    n: ast.FunctionDecNode,
-    context: types.Context
-  ): types.Function {
-    let ctx = context.addSubContext();
-    n.params.forEach(value => this.visit(value, ctx));
-    let isStatic = false;
-    for (let tag of n.tags) {
-      if (tag.name == "static") {
-        isStatic = true;
-      }
-    }
-
-    let fnType = create(types.Function, {
-      name: n.name.name,
-      parameters: n.params.map(value => {
-        return context.getType(value.type!);
-      }),
-      returns: n.returns ? context.getType(n.returns) : null,
-      isStatic
-    });
-
-    ctx.owner = fnType;
-    this.functions.push({
-      context: ctx,
-      fn: fnType,
-      body: n.body!
-    });
-
-    if (!isStatic) {
-      ctx.addVariable("this", context.owner); // TODO: This needs to work for functions within functions
-    }
-
-    this.typemap.set(n, fnType);
-    return fnType;
-  }
-
-  visitFunctionDecNode(n: ast.FunctionDecNode, context: types.Context) {
-    context.addVariable(n.name.name, this.parseFunctionDecNode(n, context));
-  }
-
-  visitVarDecNode(n: ast.VarDecNode, context: types.Context) {
-    let type: types.TypeNode;
-
-    if (n.type) {
-      type = context.getType(n.type);
-      if (n.init) {
-        this.addTypeChecked(n.init, context, type);
-      }
-    } else {
-      throw new Error("Init types are not yet supported");
-    }
-    context.addVariable(n.left.name, type);
-  }
-
-  addTypeChecked(
-    expr: ast.ExprNode,
-    context: types.Context,
-    forcedType: types.TypeNode
-  ): types.TypeNode {
-    let inf = create(types.SemiInferred, {
-      context,
-      expr,
-      forcedType
-    });
-    this.toBeChecked.push(inf);
-    return inf;
-  }
-
-  visit(n: ast.Node, context: types.Context): types.TypeNode {
-    if (!n) {
-      throw "visit: Node to visit is undefined";
-    }
-    if (n.constructor.name == "Object") {
-      throw `Object without type: (${JSON.stringify(n)})`;
-    }
-    let fn = this[("visit" + n.constructor.name) as keyof TypeResolver] as (
-      n: ast.Node,
-      context: types.Context
-    ) => types.TypeNode;
-    if (!fn) {
-      throw `TypeResolver: ${n.constructor.name} is unimplemented!`;
-    }
-    return fn.call(this, n, context);
-  }
-}
-
-type TemplateParams = types.TypeNode[];
-
-interface ResolvedType {
-  params: TemplateParams;
-  struct: types.Struct;
-}
-
-export class StructFactory {
-  // TODO: More sophisticated identification method than String serialization
-  private resolvedStructs: ResolvedType[] = [];
-
-  constructor(
-    private resolver: TypeResolver,
-    private structDecNode: ast.StructDecNode,
-    private context: types.Context,
-    private usedStructs: ast.StructDecNode[],
-    private typemap: TypeMap
-  ) {}
-
-  private findCached(templateParams: TemplateParams): types.Struct | undefined {
-    const resolvedType = this.resolvedStructs.find(({ params }) => {
-      if (params.length !== templateParams.length) {
-        return false;
-      }
-      for (let i = 0; i < templateParams.length; i++) {
-        if (templateParams[i] !== params[i]) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    if (resolvedType) {
-      return resolvedType.struct;
-    }
-
-    return undefined;
-  }
-
-  resolve(templateParams: TemplateParams): types.Struct {
-    const cached = this.findCached(templateParams);
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const n = cloneDeep(this.structDecNode);
-
-    this.usedStructs.push(n);
-
-    let struct: types.Struct = new types.Struct(
-      n.name.name,
-      this.context.addSubContext()
-    );
-
-    struct.fields.owner = struct; // TODO: What is this?
-    this.typemap.set(n, struct);
-
-    this.resolvedStructs.push({
-      struct: struct,
-      params: templateParams
-    });
-
-    if (templateParams.length > this.structDecNode.templateParams.length) {
-      throw new Error(
-        "Invocation Template Params are longer than Class Template Params"
-      );
-    }
-
-    for (let i = 0; i < this.structDecNode.templateParams.length; i++) {
-      let paramDef = this.structDecNode.templateParams[i];
-      let paramVal = templateParams[i];
-      if (
-        paramDef.type instanceof ast.PlainTypeNode &&
-        paramDef.type.name === "Type"
-      ) {
-        struct.members.addType(paramDef.left.name, paramVal);
-      } else {
-        throw new Error(
-          "Template Params other than Type are not yet supported"
-        );
-      }
-    }
-
-    for (let dec of n.declarations) {
-      this.resolver.visit(dec, struct.members);
-    }
-
-    return struct;
-  }
-}
-
-export class AliasFactory {
-  constructor(
-    private resolver: TypeResolver,
-    private node: ast.AliasDecNode,
-    private context: types.Context
-  ) {}
-
-  resolve(templateParams: TemplateParams): types.TypeNode {
-    const alias = this.node.alias;
-
-    if (templateParams.length > this.node.templateParams.length) {
-      throw new Error(
-        "Invocation Template Params are longer than Class Template Params"
-      );
-    }
-
-    const subcontext = this.context.addSubContext();
-
-    for (let i = 0; i < this.node.templateParams.length; i++) {
-      let paramDef = this.node.templateParams[i];
-      let paramVal = templateParams[i];
-      if (
-        paramDef.type instanceof ast.PlainTypeNode &&
-        paramDef.type.name === "Type"
-      ) {
-        subcontext.addType(paramDef.left.name, paramVal);
-      } else {
-        throw new Error(
-          "Template Params other than Type are not yet supported"
-        );
-      }
-    }
-
-    return subcontext.getType(alias);
-  }
-}
