@@ -30,6 +30,7 @@ fnCallStatement
 lvalue
     : ID                                  # lvalueID
     | left=lvalue '.' right=ID            # lvalueMember
+    | '*' lvalue                          # lvaluePtr
     ;
 
 taggedDeclaration
@@ -58,7 +59,7 @@ typeDef
     ;
 
 behaviorHead
-    : plainType
+    : name=ID '<' ENDL* tmpl+=ID (delim tmpl+=ID)* ENDL* '>'
     ;
 
 behaviorContent
@@ -134,7 +135,6 @@ plainType
 
 tmplParam
     : vtype
-    | expr
     ;
 
 varDef

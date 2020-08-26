@@ -49,7 +49,8 @@ import {
   ConstructorSimpleExprContext,
   BehaviorDecContext,
   BehaviorFnDefContext,
-  VarDefContext
+  VarDefContext,
+  LvaluePtrContext
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
@@ -173,10 +174,8 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     });
   }
 
-  visitTmplParam(ctx: TmplParamContext): ast.Type | ast.Expr {
-    if (ctx.expr()) {
-      return this.visit(ctx.expr()!);
-    } else if (ctx.vtype()) {
+  visitTmplParam(ctx: TmplParamContext): ast.Type {
+    if (ctx.vtype()) {
       return this.visit(ctx.vtype()!);
     } else {
       throw new Error("TmplParam of unknown kind");
@@ -215,6 +214,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       id: create(ast.Identifier, {
         name: ctx.ID().text
       })
+    });
+  }
+
+  visitLvaluePtr(ctx: LvaluePtrContext): ast.DerefExpr {
+    return create(ast.DerefExpr, {
+      expr: this.visit(ctx.lvalue())
     });
   }
 
@@ -415,8 +420,22 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   }
 
   visitBehaviorDec(ctx: BehaviorDecContext): ast.Behavior {
+    const head = ctx.behaviorHead();
+
+    const params = head._tmpl.map(id =>
+      create(ast.PlainType, {
+        name: id.text!,
+        templateParams: []
+      })
+    );
+
+    const plainType = create(ast.PlainType, {
+      name: head._name.text!,
+      templateParams: params
+    });
+
     return create(ast.Behavior, {
-      type: this.visit(ctx.behaviorHead().plainType()),
+      type: plainType,
       functions: ctx
         .behaviorContent()
         .behaviorFnDef()

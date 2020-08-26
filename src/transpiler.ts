@@ -166,11 +166,42 @@ export class Transpiler {
       return this.visit(e.expr);
     }
 
+    const ptrExpr = this.visit(e.expr);
+
     return {
       type: "ArrowFunctionExpression",
       expression: true,
-      body: this.visit(e.expr),
-      params: []
+      body: {
+        type: "ConditionalExpression",
+        test: {
+          type: "BinaryExpression",
+          operator: "!==",
+          left: {
+            type: "Identifier",
+            name: "__p"
+          },
+          right: {
+            type: "Identifier",
+            name: "undefined"
+          }
+        },
+        consequent: {
+          type: "AssignmentExpression",
+          left: ptrExpr,
+          right: {
+            type: "Identifier",
+            name: "__p"
+          },
+          operator: "="
+        },
+        alternate: ptrExpr
+      },
+      params: [
+        {
+          type: "Identifier",
+          name: "__p"
+        }
+      ]
     };
   }
 
@@ -179,6 +210,7 @@ export class Transpiler {
     if (t instanceof types.Struct) {
       return this.visit(e.expr);
     }
+
     return {
       type: "CallExpression",
       callee: this.visit(e.expr),
@@ -231,6 +263,18 @@ export class Transpiler {
   visitAssignmentStatement(
     e: ast.AssignmentStatement
   ): ESTree.ExpressionStatement {
+    // Handle assignments to dereferenced pointers
+    if (e.left instanceof ast.DerefExpr) {
+      return {
+        type: "ExpressionStatement",
+        expression: {
+          type: "CallExpression",
+          callee: this.visit(e.left.expr),
+          arguments: [this.visit(e.right)]
+        }
+      };
+    }
+
     return {
       type: "ExpressionStatement",
       expression: {

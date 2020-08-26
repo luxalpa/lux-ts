@@ -1,7 +1,6 @@
 import { ast } from "./ast";
 import * as types from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
-import cloneDeep from "lodash.clonedeep";
 import { TypeNode } from "./typenodes";
 
 interface ResolvedFunctionInfo {
@@ -12,14 +11,12 @@ interface ResolvedFunctionInfo {
 
 export class TypeChecker {
   typemap: TypeMap;
-  behaviorMap: Map<types.TypeNode, Map<types.Trait, types.Function[]>>;
   constructor(private tree: ast.Program) {}
 
   check(): {
     typemap: TypeMap;
   } {
     this.typemap = new Map<ast.Node, types.TypeNode>();
-    this.behaviorMap = new Map();
 
     const mainCtx = new types.Context();
     this.addExternals(mainCtx);

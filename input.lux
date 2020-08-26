@@ -1,28 +1,31 @@
 
-struct OtherStruct {
+struct OtherStruct<T: Type> {
     name: Integer
-    isObj: Boolean
+    isObj: T
 }
 
-struct MyStruct {
-    age: Integer
+struct MyStruct<T: Type> {
+    age: T
     name: Integer
-    str: OtherStruct
+    str: OtherStruct<Boolean>
 }
 
-behavior MyStruct {
+behavior MyStruct<T> {
     run() => Void {
         log(this.age)
         return
     }
+    getAge() => T {
+        return this.age
+    }
 }
 
 function main() => {
-    obj := <MyStruct age=255 />
+    obj := <MyStruct<Integer> age=255 />
+
     ptr := &obj.age
     obj.run()
-    ptr = &obj.name
-
+    *ptr = obj.getAge()
     log(*ptr)
     log(obj.age)
 }

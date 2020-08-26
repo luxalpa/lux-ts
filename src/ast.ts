@@ -147,7 +147,7 @@ export namespace ast {
 
   export class PlainType extends Type {
     name: string;
-    templateParams: (Type | Expr)[];
+    templateParams: Type[];
   }
 
   export class RefType extends Type {
