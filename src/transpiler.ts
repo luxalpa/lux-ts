@@ -58,7 +58,8 @@ export class Transpiler {
     if (suggestedName === "") {
       suggestedName = suggestFunctionName(t);
     }
-    const cached = this.functionNameMap.get(t);
+    // TODO: This disambiguates functions for traits, but is currently not correct (since it splits generics)
+    /*const cached = this.functionNameMap.get(t);
     if (cached) {
       return cached;
     }
@@ -71,7 +72,7 @@ export class Transpiler {
     }
 
     this.functionNamesUsed.add(suggestedName);
-    this.functionNameMap.set(t, suggestedName);
+    this.functionNameMap.set(t, suggestedName);*/
     return suggestedName;
   }
 

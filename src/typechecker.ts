@@ -50,10 +50,20 @@ export class TypeChecker {
     // First we parse the Structs, Enums and Aliases to get the type names
     for (const n of this.tree.declarations) {
       if (n instanceof ast.StructDec) {
-        context.addType(
-          n.name.name,
-          new types.StructFactory(this, n, context, this.typemap)
-        );
+        if (n.templateParams.length == 0) {
+          const struct = new types.StructFactory(
+            this,
+            n,
+            context,
+            this.typemap
+          );
+          context.addType(n.name.name, struct.resolve([]));
+        } else {
+          context.addType(
+            n.name.name,
+            new types.StructFactory(this, n, context, this.typemap)
+          );
+        }
       } else if (n instanceof ast.EnumDec) {
         context.addType(
           n.name.name,
@@ -76,11 +86,39 @@ export class TypeChecker {
     }
 
     for (const behavior of behaviors) {
+      const behaviorContext = context.addSubContext();
+
+      if (behavior.templateParams.length > 0) {
+        const struct = context.getStructFactory(behavior.type);
+
+        if (behavior.templateParams.length !== struct.templateParams.length) {
+          throw new Error(
+            `Behavior on type '${behavior.type}' has incorrect number of template params`
+          );
+        }
+
+        for (let i = 0; i < behavior.templateParams.length; i++) {
+          const paramName = behavior.templateParams[i];
+          const paramType = struct.templateParams[i];
+          behaviorContext.addType(paramName, paramType);
+        }
+      }
+
+      let type = context.getTypeByString(behavior.type);
+
+      if (type instanceof types.StructFactory) {
+        type = type.abstractStruct();
+      }
+
+      if (!(type instanceof types.TypeWithMethods)) {
+        throw new Error(`Can't define behavior on type ${getTypeName(type)}`);
+      }
+
       for (const fn of behavior.functions) {
         const resolvedFn = this.parseFunctionDecNode(
           fn,
-          context,
-          context.getType(behavior.type),
+          behaviorContext,
+          type,
           types.NoTrait
         );
         resolvedFunctions.push(resolvedFn);
@@ -88,7 +126,9 @@ export class TypeChecker {
     }
 
     for (const fn of functions) {
-      resolvedFunctions.push(this.parseFunctionDecNode(fn, context));
+      const fnInfo = this.parseFunctionDecNode(fn, context);
+      resolvedFunctions.push(fnInfo);
+      context.addVariable(fn.name.name, fnInfo.fnType);
     }
 
     return resolvedFunctions;
@@ -97,7 +137,7 @@ export class TypeChecker {
   parseFunctionDecNode(
     n: ast.FunctionDec,
     parentContext: types.Context,
-    behaviorTarget?: types.TypeNode,
+    behaviorTarget?: types.TypeWithMethods,
     behaviorTrait: types.Trait = types.NoTrait
   ): ResolvedFunctionInfo {
     let context = parentContext.addSubContext();
@@ -129,7 +169,11 @@ export class TypeChecker {
         context.addVariable("this", behaviorTarget);
       }
 
-      behaviorTarget.typeMethods.addMethod(behaviorTrait, fnType);
+      if (behaviorTarget instanceof types.Struct && behaviorTarget.factory) {
+        behaviorTarget.factory.addMethod(behaviorTrait, fnType);
+      } else {
+        behaviorTarget.typeMethods.addMethod(behaviorTrait, fnType);
+      }
     }
 
     this.typemap.set(n, fnType);
@@ -228,8 +272,24 @@ export class TypeChecker {
       console.error(fnType);
       throw new Error("Function Call on non-function");
     }
+    if (fnType.parameters.length !== n.params.length) {
+      throw new Error("Function Call has incorrect number of arguments");
+    }
+
     for (const value of n.params) {
       this.visit(value, context);
+    }
+
+    for (let i = 0; i < fnType.parameters.length; i++) {
+      const typeParam = fnType.parameters[i];
+      const nodeParam = getFromTypemap(this.typemap, n.params[i]);
+      if (!isTypeEqual(typeParam, nodeParam)) {
+        throw new Error(
+          `Type mismatch in call to function ${
+            fnType.name
+          }: Can't pass ${getTypeName(nodeParam)} as ${getTypeName(typeParam)}`
+        );
+      }
     }
 
     this.typemap.set(n, fnType.returns!);
@@ -241,6 +301,7 @@ export class TypeChecker {
       this.typemap,
       n.object
     ) as types.Struct;
+
     if (!(t instanceof types.MetaType)) {
       const v = types.getMember(t, n.property);
       if (!v) {
@@ -276,8 +337,7 @@ export class TypeChecker {
     this.typemap.set(
       n,
       create(types.RefType, {
-        ref: getFromTypemap(this.typemap, n.expr),
-        typeMethods: new types.TypeMethods()
+        ref: getFromTypemap(this.typemap, n.expr)
       })
     );
   }

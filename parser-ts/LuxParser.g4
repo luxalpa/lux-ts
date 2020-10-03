@@ -55,11 +55,7 @@ typeDef
     | 'enum' ID tmplDefParamList? enumScope        # enumDec
     | 'struct' ID tmplDefParamList? structBody     # structDec
     | 'alias' ID tmplDefParamList? ':' vtype       # aliasDec
-    | 'behavior' behaviorHead behaviorContent      # behaviorDec
-    ;
-
-behaviorHead
-    : name=ID '<' ENDL* tmpl+=ID (delim tmpl+=ID)* ENDL* '>'
+    | 'behavior' ID tmplBehavior? behaviorContent  # behaviorDec
     ;
 
 behaviorContent
@@ -110,6 +106,10 @@ fnCallParams
 fnCallParam
     : '%'? expr
     | '_'
+    ;
+
+tmplBehavior
+    : '<' ENDL* ID (delim ID)* ENDL* '>'
     ;
 
 tmplDefParamList

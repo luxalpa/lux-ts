@@ -10,9 +10,19 @@ struct MyStruct<T: Type> {
     str: OtherStruct<Boolean>
 }
 
+struct XS {
+    a: Integer
+}
+
+behavior XS {
+    run() => {
+        log(this.a)
+    }
+}
+
 behavior MyStruct<T> {
     run() => Void {
-        log(this.age)
+        //log(this.age)
         return
     }
     getAge() => T {
@@ -20,12 +30,19 @@ behavior MyStruct<T> {
     }
 }
 
+function stuff() => Integer {
+    return 100
+}
+
 function main() => {
     obj := <MyStruct<Integer> age=255 />
+    obj2 := <MyStruct<Boolean> age=false />
+    obj2.run()
 
     ptr := &obj.age
-    obj.run()
-    *ptr = obj.getAge()
+    //obj.run()
+    //*ptr = obj.getAge()
     log(*ptr)
     log(obj.age)
+    stuff()
 }

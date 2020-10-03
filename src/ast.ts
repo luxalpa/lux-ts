@@ -41,12 +41,13 @@ export namespace ast {
   }
 
   export class ObjectConstructionExpr extends Expr {
-    type: PlainType;
+    type: Type;
     entries: Map<string, Expr>;
   }
 
   export class Behavior extends Node {
-    type: PlainType;
+    type: string;
+    templateParams: string[];
     functions: FunctionDec[];
   }
 

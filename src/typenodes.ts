@@ -1,6 +1,6 @@
 import { ast } from "./ast";
 import { create, TypeMap } from "./util";
-import { TypeChecker } from "./typechecker";
+import { getTypeName, TypeChecker } from "./typechecker";
 import cloneDeep from "lodash.clonedeep";
 
 export class TypeMethods {
@@ -18,22 +18,25 @@ export class TypeMethods {
 export class TypeNode {
   // We can define methods on any type, so we need this as a common object.
   // We could inline this using inheritance, but that would make type creation awkward (because of the function) and we'd need custom constructors on every TypeNode.
+}
+
+export class TypeWithMethods {
   typeMethods: TypeMethods = new TypeMethods();
 }
 
-export class Enum extends TypeNode {
+export class Enum extends TypeWithMethods {
   name: string;
   members: string[];
   internalType: TypeNode;
 }
 
-export class Integer extends TypeNode {}
+export class Integer extends TypeWithMethods {}
 
-export class Boolean extends TypeNode {}
+export class Boolean extends TypeWithMethods {}
 
-export class Void extends TypeNode {}
+export class Void extends TypeWithMethods {}
 
-export class Function extends TypeNode {
+export class Function extends TypeWithMethods {
   name: string;
   parameters: TypeNode[];
   returns: TypeNode;
@@ -53,8 +56,9 @@ export class Trait {
 
 export const NoTrait = new Trait("");
 
-export class Struct extends TypeNode {
+export class Struct extends TypeWithMethods {
   fields = new Map<string, TypeNode>();
+  factory?: StructFactory;
   constructor(public name: string) {
     super();
   }
@@ -66,6 +70,10 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
     if (v) {
       return v;
     }
+  }
+
+  if (!(t instanceof TypeWithMethods)) {
+    throw new Error(`Can't define methods on ${getTypeName(t)}`);
   }
 
   const fns = t.typeMethods.methods.get(NoTrait);
@@ -117,6 +125,8 @@ export class RefType extends TypeNode {
   }
 }
 
+export class TemplateParam extends TypeNode {}
+
 interface ContextSymbol {
   name: string;
   type: TypeNode;
@@ -149,6 +159,16 @@ export class Context {
     }
   }
 
+  getStructFactory(name: string): StructFactory {
+    for (const ctx of this.getAllContexts()) {
+      const typeNode = ctx.types.get(name);
+      if (typeNode instanceof StructFactory) {
+        return typeNode;
+      }
+    }
+    throw new Error(`Struct '${name}' not found`);
+  }
+
   // Resolves the type of type AST nodes
   getType(node: ast.Type): TypeNode {
     if (node instanceof ast.PlainType) {
@@ -168,10 +188,7 @@ export class Context {
     throw new Error("unknown TypeNode");
   }
 
-  getTypeByString(
-    name: string,
-    params: (ast.Type | ast.Expr)[] = []
-  ): TypeNode {
+  getTypeByString(name: string, params: ast.Type[] = []): TypeNode {
     let typeNode: TypeNode | undefined;
     for (const ctx of this.getAllContexts()) {
       typeNode = ctx.types.get(name);
@@ -184,7 +201,7 @@ export class Context {
       throw new Error(`Type "${name}" not found`);
     }
 
-    if (typeNode instanceof StructFactory) {
+    if (typeNode instanceof StructFactory && params.length > 0) {
       const templateParams = params.map(param => {
         if (param instanceof ast.Expr) {
           throw new Error("Expression Templates not yet supported!");
@@ -194,7 +211,7 @@ export class Context {
       });
 
       return typeNode.resolve(templateParams);
-    } else if (params && params.length > 0) {
+    } else if (params.length > 0) {
       throw new Error("Can't have Template Parameters on non-struct type");
     }
 
@@ -238,7 +255,7 @@ export class Context {
       const type = ctx.types.get(name);
       if (type) {
         if (type instanceof StructFactory) {
-          return new MetaType(type.resolve([])); // Todo: Implement this for static generic types
+          return new MetaType(type.abstractStruct()); // Todo: Implement this for static generic types
         }
         return new MetaType(type);
       }
@@ -255,8 +272,43 @@ interface ResolvedType {
   struct: Struct;
 }
 
-export class StructFactory extends TypeNode {
+export class StructFactory extends TypeWithMethods {
   private resolvedStructs: ResolvedType[] = [];
+  templateParams: TemplateParam[] = [];
+
+  addMethod(trait: Trait, fn: Function) {
+    this.typeMethods.addMethod(trait, fn);
+    for (let { params, struct } of this.resolvedStructs) {
+      this.addMethodToStruct(trait, fn, params, struct);
+    }
+  }
+
+  addMethodToStruct(
+    trait: Trait,
+    fn: Function,
+    params: TemplateParams,
+    struct: Struct
+  ) {
+    const newFn: Function = create(Function, {
+      belongsTo: fn.belongsTo,
+      typeMethods: fn.typeMethods,
+      isStatic: fn.isStatic,
+      name: fn.name,
+      parameters: fn.parameters,
+      returns: fn.returns
+    });
+
+    // TODO: Also do for parameters
+
+    if (fn.returns instanceof TemplateParam) {
+      const p = this.templateParams.findIndex(value => value == fn.returns);
+      if (p != -1) {
+        newFn.returns = params[p];
+      }
+    }
+
+    struct.typeMethods.addMethod(trait, newFn);
+  }
 
   constructor(
     private typeChecker: TypeChecker,
@@ -265,6 +317,9 @@ export class StructFactory extends TypeNode {
     private typemap: TypeMap
   ) {
     super();
+    for (let param of this.structDecNode.templateParams) {
+      this.templateParams.push(new TemplateParam());
+    }
   }
 
   private findCached(templateParams: TemplateParams): Struct | undefined {
@@ -287,28 +342,42 @@ export class StructFactory extends TypeNode {
     return undefined;
   }
 
+  abstractStruct(): Struct {
+    return this.resolve(this.templateParams);
+  }
+
   resolve(templateParams: TemplateParams): Struct {
     const cached = this.findCached(templateParams);
     if (cached !== undefined) {
       return cached;
     }
 
-    const n = cloneDeep(this.structDecNode);
-
-    let struct: Struct = new Struct(n.name.name);
-
-    this.typemap.set(n, struct);
-
-    this.resolvedStructs.push({
-      struct,
-      params: templateParams
-    });
-
     if (templateParams.length > this.structDecNode.templateParams.length) {
       throw new Error(
         "Invocation Template Params are longer than Class Template Params"
       );
     }
+
+    const n = cloneDeep(this.structDecNode);
+
+    let struct: Struct = new Struct(n.name.name);
+    if (templateParams.length > 0) {
+      // only templated structs should be back-referenced to their generic for now.
+      struct.factory = this;
+    }
+
+    this.typemap.set(n, struct);
+
+    for (let [trait, fns] of this.typeMethods.methods.entries()) {
+      for (let fn of fns) {
+        this.addMethodToStruct(trait, fn, templateParams, struct);
+      }
+    }
+
+    this.resolvedStructs.push({
+      struct,
+      params: templateParams
+    });
 
     const templateSubContext = this.context.addSubContext();
 

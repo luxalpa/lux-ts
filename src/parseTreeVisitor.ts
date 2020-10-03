@@ -382,7 +382,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return stmt;
   }
 
-  visitForInfinityStmt(ctx: ForInfinityStmtContext): ast.ForStatement {
+  visitForInfinityStmt(_: ForInfinityStmtContext): ast.ForStatement {
     // Return incomplete For Statement.
     return create(ast.ForStatement, {
       scope: undefined
@@ -420,22 +420,20 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   }
 
   visitBehaviorDec(ctx: BehaviorDecContext): ast.Behavior {
-    const head = ctx.behaviorHead();
+    const tmpl = ctx.tmplBehavior();
 
-    const params = head._tmpl.map(id =>
-      create(ast.PlainType, {
-        name: id.text!,
-        templateParams: []
-      })
-    );
+    let templateParams: string[] = [];
 
-    const plainType = create(ast.PlainType, {
-      name: head._name.text!,
-      templateParams: params
-    });
+    if (ctx.tmplBehavior()) {
+      templateParams = ctx
+        .tmplBehavior()!
+        .ID()
+        .map(node => node.text);
+    }
 
     return create(ast.Behavior, {
-      type: plainType,
+      type: ctx.ID().text,
+      templateParams,
       functions: ctx
         .behaviorContent()
         .behaviorFnDef()
