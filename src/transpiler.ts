@@ -4,16 +4,15 @@ import * as types from "./typenodes";
 import { getFromTypemap } from "./util";
 
 export class Transpiler {
-  functionNameMap = new Map<types.Function, string>();
-  functionNamesUsed = new Set<string>();
-
   constructor(private typemap: Map<ast.Node, types.TypeNode>) {}
 
   transpile(program: ast.Program): ESTree.Program {
     let stmts: ESTree.Statement[] = [];
+    let structConstrStmts: ESTree.Statement[] = [];
     for (let declaration of program.declarations) {
       if (declaration instanceof ast.StructDec) {
         // These are being done separately
+        structConstrStmts.push(this.makeStruct(declaration));
         continue;
       }
 
@@ -30,6 +29,8 @@ export class Transpiler {
         stmts.push(s);
       }
     }
+
+    stmts.unshift(...structConstrStmts);
 
     return {
       type: "Program",
@@ -52,6 +53,45 @@ export class Transpiler {
       throw new Error(`Transpiler: ${n.constructor.name} is unimplemented!`);
     }
     return fn.call(this, n);
+  }
+
+  makeStruct(struct: ast.StructDec): ESTree.FunctionDeclaration {
+    return {
+      type: "FunctionDeclaration",
+      id: {
+        type: "Identifier",
+        name: struct.name.name
+      },
+      body: {
+        type: "BlockStatement",
+        body: struct.declarations.map(d => ({
+          type: "ExpressionStatement",
+          expression: {
+            type: "AssignmentExpression",
+            operator: "=",
+            left: {
+              type: "MemberExpression",
+              computed: false,
+              object: {
+                type: "ThisExpression"
+              },
+              property: {
+                type: "Identifier",
+                name: d.left.name
+              }
+            },
+            right: {
+              type: "Identifier",
+              name: d.left.name
+            }
+          }
+        }))
+      },
+      params: struct.declarations.map(d => ({
+        type: "Identifier",
+        name: d.left.name
+      }))
+    };
   }
 
   uniqueFunctionName(t: types.Function, suggestedName: string = ""): string {
@@ -93,7 +133,9 @@ export class Transpiler {
     };
   }
 
-  visitFunctionDec(e: ast.FunctionDec): ESTree.FunctionDeclaration {
+  visitFunctionDec(
+    e: ast.FunctionDec
+  ): ESTree.FunctionDeclaration | ESTree.AssignmentExpression {
     const fn = getFromTypemap<types.Function>(this.typemap, e);
     const name = this.uniqueFunctionName(fn);
 
@@ -102,7 +144,41 @@ export class Transpiler {
       name: param.left.name
     }));
     if (fn.belongsTo) {
-      params = [{ type: "Identifier", name: "__self" }, ...params];
+      if (!(fn.belongsTo instanceof types.Struct)) {
+        throw new Error(
+          "Methods on non-structs not yet supported in transpiler"
+        );
+      }
+
+      return {
+        type: "AssignmentExpression",
+        left: {
+          type: "MemberExpression",
+          computed: false,
+          object: {
+            type: "MemberExpression",
+            computed: false,
+            object: {
+              type: "Identifier",
+              name: fn.belongsTo.name
+            },
+            property: {
+              type: "Identifier",
+              name: "prototype"
+            }
+          },
+          property: {
+            type: "Identifier",
+            name: fn.name
+          }
+        },
+        operator: "=",
+        right: {
+          type: "FunctionExpression",
+          params,
+          body: this.visit(e.body)
+        }
+      };
     }
 
     return {
@@ -225,8 +301,13 @@ export class Transpiler {
       return {
         type: "CallExpression",
         callee: {
-          type: "Identifier",
-          name: this.uniqueFunctionName(fnType)
+          type: "MemberExpression",
+          computed: false,
+          object: this.visit(e.fn.object),
+          property: {
+            type: "Identifier",
+            name: this.uniqueFunctionName(fnType)
+          }
         },
         arguments: [
           this.visit(e.fn.object),
@@ -257,7 +338,7 @@ export class Transpiler {
   visitIdentifier(e: ast.Identifier): ESTree.Identifier {
     return {
       type: "Identifier",
-      name: e.name === "this" ? "__self" : e.name
+      name: e.name
     };
   }
 
@@ -473,10 +554,10 @@ export class Transpiler {
 
   visitObjectConstructionExpr(
     e: ast.ObjectConstructionExpr
-  ): ESTree.ObjectExpression {
+  ): ESTree.NewExpression {
     let obj: types.Struct = getFromTypemap<types.Struct>(this.typemap, e);
 
-    const properties = [...obj.fields.entries()].map<ESTree.Property>(
+    const args = [...obj.fields.entries()].map<ESTree.Expression>(
       ([name, type]) => {
         const value = e.entries.get(name);
         let expr: ESTree.Expression;
@@ -487,24 +568,17 @@ export class Transpiler {
           expr = this.visit(value);
         }
 
-        return {
-          type: "Property",
-          method: false,
-          computed: false,
-          shorthand: false,
-          key: {
-            type: "Identifier",
-            name
-          },
-          value: expr,
-          kind: "init"
-        };
+        return expr;
       }
     );
 
     return {
-      type: "ObjectExpression",
-      properties
+      type: "NewExpression",
+      arguments: args,
+      callee: {
+        type: "Identifier",
+        name: e.type.name
+      }
     };
   }
 
@@ -537,21 +611,14 @@ function defaultValueForType(t: types.TypeNode): ESTree.Expression {
       };
     case types.Struct:
       return {
-        type: "ObjectExpression",
-        properties: [...(t as types.Struct).fields.entries()].map(
-          ([name, type]) => ({
-            type: "Property",
-            kind: "init",
-            key: {
-              type: "Identifier",
-              name
-            },
-            shorthand: false,
-            computed: false,
-            method: false,
-            value: defaultValueForType(type)
-          })
-        )
+        type: "NewExpression",
+        callee: {
+          type: "Identifier",
+          name: (t as types.Struct).name
+        },
+        arguments: [
+          ...(t as types.Struct).fields.entries()
+        ].map(([name, type]) => defaultValueForType(type))
       };
     default:
       return {
@@ -564,7 +631,8 @@ function defaultValueForType(t: types.TypeNode): ESTree.Expression {
 function suggestFunctionName(t: types.Function): string {
   // TODO: Namespacing
   if (t.belongsTo) {
-    return `${getTypeName(t.belongsTo)}$${t.name}`;
+    // TODO: Support traits
+    return t.name;
   }
   return t.name;
 }
