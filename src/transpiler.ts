@@ -309,10 +309,7 @@ export class Transpiler {
             name: this.uniqueFunctionName(fnType)
           }
         },
-        arguments: [
-          this.visit(e.fn.object),
-          ...e.params.map(param => this.visit(param))
-        ]
+        arguments: [...e.params.map(param => this.visit(param))]
       };
     }
 

@@ -25,6 +25,9 @@ behavior MyStruct<T> {
         //log(this.age)
         return
     }
+    setAge(param: T) => {
+        this.age = param
+    }
     getAge() => T {
         return this.age
     }
@@ -40,8 +43,9 @@ function main() => {
     obj2.run()
 
     ptr := &obj.age
+    obj.setAge(100)
     //obj.run()
-    //*ptr = obj.getAge()
+    *ptr = obj.getAge()
     log(*ptr)
     log(obj.age)
     stuff()

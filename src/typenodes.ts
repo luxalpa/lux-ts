@@ -306,6 +306,16 @@ export class StructFactory extends TypeWithMethods {
       }
     }
 
+    for (let i = 0; i < fn.parameters.length; i++) {
+      const param = fn.parameters[i];
+      if (param instanceof TemplateParam) {
+        const p = this.templateParams.findIndex(value => value == param);
+        if (p != -1) {
+          newFn.parameters[i] = params[p];
+        }
+      }
+    }
+
     struct.typeMethods.addMethod(trait, newFn);
   }
 
