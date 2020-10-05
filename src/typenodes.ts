@@ -293,11 +293,9 @@ export class StructFactory extends TypeWithMethods {
       typeMethods: fn.typeMethods,
       isStatic: fn.isStatic,
       name: fn.name,
-      parameters: fn.parameters,
+      parameters: [...fn.parameters],
       returns: fn.returns
     });
-
-    // TODO: Also do for parameters
 
     if (fn.returns instanceof TemplateParam) {
       const p = this.templateParams.findIndex(value => value == fn.returns);
