@@ -35,7 +35,7 @@ export class Boolean extends TypeWithMethods {}
 
 export class Void extends TypeWithMethods {}
 
-export class Function extends TypeWithMethods {
+export class Function {
   name: string;
   parameters: TypeNode[];
   returns: TypeNode;
@@ -50,6 +50,7 @@ export class FunctionPointer extends TypeNode {
 }
 
 export class Trait {
+  functions: Function[] = [];
   constructor(public name: string) {}
 }
 
@@ -290,7 +291,6 @@ export class StructFactory extends TypeWithMethods {
   ) {
     const newFn: Function = create(Function, {
       belongsTo: fn.belongsTo,
-      typeMethods: fn.typeMethods,
       isStatic: fn.isStatic,
       name: fn.name,
       parameters: [...fn.parameters],

@@ -56,6 +56,15 @@ typeDef
     | 'struct' ID tmplDefParamList? structBody     # structDec
     | 'alias' ID tmplDefParamList? ':' vtype       # aliasDec
     | 'behavior' ID tmplBehavior? behaviorContent  # behaviorDec
+    | 'trait' ID tmplDefParamList? traitBody       # traitDec
+    ;
+
+traitBody
+    : '{' ENDL* (traitFnDec (delim traitFnDec)*)? ENDL* '}'
+    ;
+
+traitFnDec
+    : ID fnType fnReturnType
     ;
 
 behaviorContent

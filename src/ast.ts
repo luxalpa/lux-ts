@@ -51,6 +51,18 @@ export namespace ast {
     functions: FunctionDec[];
   }
 
+  export class Trait extends Node {
+    name: string;
+    templateParams: VarDec[];
+    functions: TraitFnDec[];
+  }
+
+  export class TraitFnDec extends Node {
+    name: Identifier;
+    params: VarDec[];
+    returns: Type;
+  }
+
   export class RefExpr extends Expr {
     expr: Expr;
   }

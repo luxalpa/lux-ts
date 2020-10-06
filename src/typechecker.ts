@@ -1,7 +1,7 @@
 import { ast } from "./ast";
 import * as types from "./typenodes";
-import { create, getFromTypemap, TypeMap } from "./util";
 import { TypeNode } from "./typenodes";
+import { create, getFromTypemap, TypeMap } from "./util";
 
 interface ResolvedFunctionInfo {
   context: types.Context;
@@ -46,7 +46,8 @@ export class TypeChecker {
     const behaviors = new Array<ast.Behavior>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
-    const structs = new Map<types.Struct, types.StructFactory>();
+    const structs = new Array<[types.Struct, types.StructFactory]>();
+    const traits = new Array<[types.Trait, ast.Trait]>();
 
     // First we parse the Structs, Enums and Aliases to get the type names
     for (const n of this.tree.declarations) {
@@ -58,11 +59,10 @@ export class TypeChecker {
             context,
             this.typemap
           );
-          // TODO: Fix this
           const tempStruct = new types.Struct(n.name.name);
 
           context.addType(n.name.name, tempStruct);
-          structs.set(tempStruct, struct);
+          structs.push([tempStruct, struct]);
         } else {
           context.addType(
             n.name.name,
@@ -87,13 +87,34 @@ export class TypeChecker {
         behaviors.push(n);
       } else if (n instanceof ast.FunctionDec) {
         functions.push(n);
+      } else if (n instanceof ast.Trait) {
+        const trait = new types.Trait(n.name);
+        context.addType(n.name, trait);
+        traits.push([trait, n]);
       }
     }
 
-    for (const [tempStruct, structFactory] of structs.entries()) {
+    // Structs
+    for (const [tempStruct, structFactory] of structs) {
       Object.assign(tempStruct, structFactory.resolve([]));
     }
 
+    // Traits
+    for (const [tempTrait, node] of traits) {
+      tempTrait.functions = node.functions.map(n =>
+        create(types.Function, {
+          name: n.name.name,
+          parameters: n.params.map(value => {
+            return context.getType(value.type!);
+          }),
+          returns: context.getType(n.returns),
+          isStatic: false,
+          belongsTo: tempTrait
+        })
+      );
+    }
+
+    // Methods
     for (const behavior of behaviors) {
       const behaviorContext = context.addSubContext();
 
@@ -167,7 +188,6 @@ export class TypeChecker {
         ? parentContext.getType(n.returns)
         : parentContext.getTypeByString("Void"),
       isStatic,
-      typeMethods: new types.TypeMethods(),
       belongsTo: behaviorTarget
     });
 
@@ -204,8 +224,7 @@ export class TypeChecker {
         name: "log",
         parameters: [context.getTypeByString("Integer")],
         isStatic: false,
-        returns: context.getTypeByString("Void"),
-        typeMethods: new types.TypeMethods()
+        returns: context.getTypeByString("Void")
       })
     );
 
@@ -226,7 +245,8 @@ export class TypeChecker {
       n instanceof ast.FunctionDec ||
       n instanceof ast.EnumDec ||
       n instanceof ast.StructDec ||
-      n instanceof ast.Behavior
+      n instanceof ast.Behavior ||
+      n instanceof ast.Trait
     ) {
       return;
     }

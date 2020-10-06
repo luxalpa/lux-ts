@@ -16,7 +16,10 @@ export class Transpiler {
         continue;
       }
 
-      if (declaration instanceof ast.AliasDec) {
+      if (
+        declaration instanceof ast.AliasDec ||
+        declaration instanceof ast.Trait
+      ) {
         continue;
       }
 

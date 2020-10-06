@@ -50,7 +50,8 @@ import {
   BehaviorDecContext,
   BehaviorFnDefContext,
   VarDefContext,
-  LvaluePtrContext
+  LvaluePtrContext,
+  TraitDecContext
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
@@ -438,6 +439,33 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .behaviorContent()
         .behaviorFnDef()
         .map(def => this.visitFuncDec(def))
+    });
+  }
+
+  visitTraitDec(ctx: TraitDecContext): ast.Trait {
+    let templateParams: ast.VarDec[] = [];
+
+    if (ctx.tmplDefParamList()) {
+      const defParams = ctx.tmplDefParamList()!.tmplDefParam();
+      templateParams = defParams.map<ast.VarDec>(dec => this.visit(dec));
+    }
+
+    return create(ast.Trait, {
+      name: ctx.ID().text,
+      templateParams,
+      functions: ctx
+        .traitBody()
+        .traitFnDec()
+        .map(dec =>
+          create(ast.TraitFnDec, {
+            name: create(ast.Identifier, { name: dec.ID().text }),
+            params: dec
+              .fnType()
+              .fnDefParam()
+              .map(p => this.visit(p) as ast.VarDec),
+            returns: this.visit(dec.fnReturnType())
+          })
+        )
     });
   }
 
