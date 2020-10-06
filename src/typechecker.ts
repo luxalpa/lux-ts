@@ -46,6 +46,7 @@ export class TypeChecker {
     const behaviors = new Array<ast.Behavior>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
+    const structs = new Map<types.Struct, types.StructFactory>();
 
     // First we parse the Structs, Enums and Aliases to get the type names
     for (const n of this.tree.declarations) {
@@ -57,7 +58,11 @@ export class TypeChecker {
             context,
             this.typemap
           );
-          context.addType(n.name.name, struct.resolve([]));
+          // TODO: Fix this
+          const tempStruct = new types.Struct(n.name.name);
+
+          context.addType(n.name.name, tempStruct);
+          structs.set(tempStruct, struct);
         } else {
           context.addType(
             n.name.name,
@@ -83,6 +88,10 @@ export class TypeChecker {
       } else if (n instanceof ast.FunctionDec) {
         functions.push(n);
       }
+    }
+
+    for (const [tempStruct, structFactory] of structs.entries()) {
+      Object.assign(tempStruct, structFactory.resolve([]));
     }
 
     for (const behavior of behaviors) {
