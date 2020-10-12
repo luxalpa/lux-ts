@@ -53,7 +53,7 @@ export class Transpiler {
     return {
       type: "Program",
       sourceType: "script",
-      body: stmts
+      body: stmts,
     };
   }
 
@@ -78,11 +78,11 @@ export class Transpiler {
       type: "FunctionDeclaration",
       id: {
         type: "Identifier",
-        name: struct.name.name
+        name: struct.name.name,
       },
       body: {
         type: "BlockStatement",
-        body: struct.declarations.map(d => ({
+        body: struct.declarations.map((d) => ({
           type: "ExpressionStatement",
           expression: {
             type: "AssignmentExpression",
@@ -90,25 +90,26 @@ export class Transpiler {
             left: {
               type: "MemberExpression",
               computed: false,
+              optional: false,
               object: {
-                type: "ThisExpression"
+                type: "ThisExpression",
               },
               property: {
                 type: "Identifier",
-                name: d.left.name
-              }
+                name: d.left.name,
+              },
             },
             right: {
               type: "Identifier",
-              name: d.left.name
-            }
-          }
-        }))
+              name: d.left.name,
+            },
+          },
+        })),
       },
-      params: struct.declarations.map(d => ({
+      params: struct.declarations.map((d) => ({
         type: "Identifier",
-        name: d.left.name
-      }))
+        name: d.left.name,
+      })),
     };
   }
 
@@ -144,13 +145,13 @@ export class Transpiler {
           type: "VariableDeclarator",
           id: {
             type: "Identifier",
-            name: e.left.name
+            name: e.left.name,
           },
-          init: e.init && this.visit(e.init)
-        }
+          init: e.init && this.visit(e.init),
+        },
       ],
       kind: "let",
-      type: "VariableDeclaration"
+      type: "VariableDeclaration",
     };
   }
 
@@ -160,9 +161,9 @@ export class Transpiler {
     const fn = getFromTypemap<types.Function>(this.typemap, e);
     const name = this.uniqueFunctionName(fn);
 
-    let params: ESTree.Pattern[] = e.params.map(param => ({
+    let params: ESTree.Pattern[] = e.params.map((param) => ({
       type: "Identifier",
-      name: param.left.name
+      name: param.left.name,
     }));
     if (fn.belongsTo) {
       if (!(fn.belongsTo instanceof types.Struct)) {
@@ -176,29 +177,31 @@ export class Transpiler {
         left: {
           type: "MemberExpression",
           computed: false,
+          optional: false,
           object: {
+            optional: false,
             type: "MemberExpression",
             computed: false,
             object: {
               type: "Identifier",
-              name: fn.belongsTo.name
+              name: fn.belongsTo.name,
             },
             property: {
               type: "Identifier",
-              name: "prototype"
-            }
+              name: "prototype",
+            },
           },
           property: {
             type: "Identifier",
-            name: fnNameFromTrait(fn, fn.trait)
-          }
+            name: fnNameFromTrait(fn, fn.trait),
+          },
         },
         operator: "=",
         right: {
           type: "FunctionExpression",
           params,
-          body: this.visit(e.body)
-        }
+          body: this.visit(e.body),
+        },
       };
     }
 
@@ -206,17 +209,17 @@ export class Transpiler {
       type: "FunctionDeclaration",
       id: {
         type: "Identifier",
-        name
+        name,
       },
       body: this.visit(e.body),
-      params
+      params,
     };
   }
 
   visitScope(e: ast.Scope): ESTree.BlockStatement {
     return {
       type: "BlockStatement",
-      body: e.statements.map(statement => this.visit(statement))
+      body: e.statements.map((statement) => this.visit(statement)),
     };
   }
 
@@ -235,14 +238,14 @@ export class Transpiler {
       operator: op,
       left: this.visit(e.left),
       right: this.visit(e.right),
-      type: "BinaryExpression"
+      type: "BinaryExpression",
     };
   }
 
   visitNumber(e: ast.Number): ESTree.SimpleLiteral {
     return {
       type: "Literal",
-      value: e.value
+      value: e.value,
     };
   }
 
@@ -251,7 +254,7 @@ export class Transpiler {
     if (fn instanceof types.Function) {
       return {
         type: "Identifier",
-        name: this.uniqueFunctionName(fn)
+        name: this.uniqueFunctionName(fn),
       };
     }
     return this.visit(e.id);
@@ -276,30 +279,30 @@ export class Transpiler {
           operator: "!==",
           left: {
             type: "Identifier",
-            name: "__p"
+            name: "__p",
           },
           right: {
             type: "Identifier",
-            name: "undefined"
-          }
+            name: "undefined",
+          },
         },
         consequent: {
           type: "AssignmentExpression",
           left: ptrExpr,
           right: {
             type: "Identifier",
-            name: "__p"
+            name: "__p",
           },
-          operator: "="
+          operator: "=",
         },
-        alternate: ptrExpr
+        alternate: ptrExpr,
       },
       params: [
         {
           type: "Identifier",
-          name: "__p"
-        }
-      ]
+          name: "__p",
+        },
+      ],
     };
   }
 
@@ -312,7 +315,8 @@ export class Transpiler {
     return {
       type: "CallExpression",
       callee: this.visit(e.expr),
-      arguments: []
+      arguments: [],
+      optional: false,
     };
   }
 
@@ -322,23 +326,26 @@ export class Transpiler {
 
       return {
         type: "CallExpression",
+        optional: false,
         callee: {
           type: "MemberExpression",
           computed: false,
+          optional: false,
           object: this.visit(e.fn.object),
           property: {
             type: "Identifier",
-            name: this.uniqueFunctionName(fnType)
-          }
+            name: this.uniqueFunctionName(fnType),
+          },
         },
-        arguments: [...e.params.map(param => this.visit(param))]
+        arguments: [...e.params.map((param) => this.visit(param))],
       };
     }
 
     return {
       type: "CallExpression",
       callee: this.visit(e.fn),
-      arguments: e.params.map(param => this.visit(param))
+      arguments: e.params.map((param) => this.visit(param)),
+      optional: false,
     };
   }
 
@@ -346,18 +353,19 @@ export class Transpiler {
     return {
       type: "MemberExpression",
       object: this.visit(e.object),
+      optional: false,
       property: {
         type: "Identifier",
-        name: e.property
+        name: e.property,
       },
-      computed: false
+      computed: false,
     };
   }
 
   visitIdentifier(e: ast.Identifier): ESTree.Identifier {
     return {
       type: "Identifier",
-      name: e.name
+      name: e.name,
     };
   }
 
@@ -371,8 +379,9 @@ export class Transpiler {
         expression: {
           type: "CallExpression",
           callee: this.visit(e.left.expr),
-          arguments: [this.visit(e.right)]
-        }
+          arguments: [this.visit(e.right)],
+          optional: false,
+        },
       };
     }
 
@@ -382,8 +391,8 @@ export class Transpiler {
         type: "AssignmentExpression",
         operator: "=",
         left: this.visit(e.left),
-        right: this.visit(e.right)
-      }
+        right: this.visit(e.right),
+      },
     };
   }
 
@@ -396,21 +405,21 @@ export class Transpiler {
           type: "VariableDeclarator",
           id: {
             type: "Identifier",
-            name: e.name.name
+            name: e.name.name,
           },
           init: {
             type: "ObjectExpression",
-            properties: e.entries.map(entry => this.visit(entry))
-          }
-        }
-      ]
+            properties: e.entries.map((entry) => this.visit(entry)),
+          },
+        },
+      ],
     };
   }
 
   visitFunctionCallStmt(e: ast.FunctionCallStmt): ESTree.ExpressionStatement {
     return {
       type: "ExpressionStatement",
-      expression: this.visit(e.fnCall)
+      expression: this.visit(e.fnCall),
     };
   }
 
@@ -418,14 +427,14 @@ export class Transpiler {
     return {
       type: "IfStatement",
       test: this.visit(e.condition),
-      consequent: this.visit(e.scope)
+      consequent: this.visit(e.scope),
     };
   }
 
   visitForStatement(e: ast.ForStatement): ESTree.ForStatement {
     return {
       type: "ForStatement",
-      body: this.visit(e.scope)
+      body: this.visit(e.scope),
     };
   }
 
@@ -442,16 +451,16 @@ export class Transpiler {
         operator: "=",
         left: {
           type: "Identifier",
-          name: e.id
+          name: e.id,
         },
-        right: (undefined as unknown) as ESTree.Expression
+        right: (undefined as unknown) as ESTree.Expression,
       },
       {
         type: "VariableDeclarator",
         id: {
           type: "Identifier",
-          name: e.id
-        }
+          name: e.id,
+        },
       }
     );
   }
@@ -469,18 +478,20 @@ export class Transpiler {
     const updateExprRightHand: ESTree.Expression = {
       type: "CallExpression",
       arguments: [],
+      optional: false,
       callee: {
         type: "MemberExpression",
+        optional: false,
         object: {
           type: "Identifier",
-          name: loopTemp
+          name: loopTemp,
         },
         property: {
           type: "Identifier",
-          name: "next"
+          name: "next",
         },
-        computed: false
-      }
+        computed: false,
+      },
     };
 
     let updateExpr: ESTree.Expression = updateExprRightHand;
@@ -488,7 +499,7 @@ export class Transpiler {
     if (optAssign) {
       updateExpr = {
         ...optAssign,
-        right: updateExpr
+        right: updateExpr,
       };
     }
 
@@ -497,16 +508,16 @@ export class Transpiler {
         type: "VariableDeclarator",
         id: {
           type: "Identifier",
-          name: loopTemp
+          name: loopTemp,
         },
-        init
-      }
+        init,
+      },
     ];
 
     if (optDeclaration) {
       declarations.push({
         ...optDeclaration,
-        init: updateExprRightHand
+        init: updateExprRightHand,
       });
     }
 
@@ -516,36 +527,38 @@ export class Transpiler {
       init: {
         type: "VariableDeclaration",
         kind: "let",
-        declarations
+        declarations,
       },
       test: {
         type: "UnaryExpression",
         operator: "!",
         prefix: true,
         argument: {
+          optional: false,
           type: "CallExpression",
           arguments: [],
           callee: {
+            optional: false,
             type: "MemberExpression",
             object: {
               type: "Identifier",
-              name: loopTemp
+              name: loopTemp,
             },
             property: {
               type: "Identifier",
-              name: "atEnd"
+              name: "atEnd",
             },
-            computed: false
-          }
-        }
+            computed: false,
+          },
+        },
       },
-      update: updateExpr
+      update: updateExpr,
     };
   }
 
   visitBreakStatement(e: ast.BreakStatement): ESTree.BreakStatement {
     return {
-      type: "BreakStatement"
+      type: "BreakStatement",
     };
   }
 
@@ -555,19 +568,19 @@ export class Transpiler {
       key: this.visit(e.name),
       value: {
         type: "Literal",
-        value: e.value
+        value: e.value,
       },
       kind: "init",
       method: false,
       shorthand: false,
-      computed: false
+      computed: false,
     };
   }
 
   visitReturnStatement(e: ast.ReturnStatement): ESTree.ReturnStatement {
     return {
       type: "ReturnStatement",
-      argument: e.expr && this.visit(e.expr)
+      argument: e.expr && this.visit(e.expr),
     };
   }
 
@@ -596,8 +609,8 @@ export class Transpiler {
       arguments: args,
       callee: {
         type: "Identifier",
-        name: e.type.name
-      }
+        name: e.type.name,
+      },
     };
   }
 
@@ -606,7 +619,7 @@ export class Transpiler {
   }
 
   visitBehavior(e: ast.Behavior) {
-    return e.functions.map(fn => this.visit(fn));
+    return e.functions.map((fn) => this.visit(fn));
   }
 }
 
@@ -616,33 +629,33 @@ function defaultValueForType(t: types.TypeNode): ESTree.Expression {
     case types.Boolean:
       return {
         type: "Identifier",
-        name: "false"
+        name: "false",
       };
     case types.Integer:
       return {
         type: "Literal",
-        value: 0
+        value: 0,
       };
     case types.RefType:
       return {
         type: "Literal",
-        value: null
+        value: null,
       };
     case types.Struct:
       return {
         type: "NewExpression",
         callee: {
           type: "Identifier",
-          name: (t as types.Struct).name
+          name: (t as types.Struct).name,
         },
         arguments: [
-          ...(t as types.Struct).fields.entries()
-        ].map(([name, type]) => defaultValueForType(type))
+          ...(t as types.Struct).fields.entries(),
+        ].map(([name, type]) => defaultValueForType(type)),
       };
     default:
       return {
         type: "Literal",
-        value: null
+        value: null,
       };
   }
 }

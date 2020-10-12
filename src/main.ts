@@ -28,10 +28,10 @@ try {
   const transpiler = new Transpiler(typemap);
   const v = transpiler.transpile(node);
 
-  const code = generate(v);
+  const code = generate(v as any);
 
   console.log(code);
-  (function() {
+  (function () {
     function log(text: string) {
       console.log(text);
     }

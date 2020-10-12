@@ -10,20 +10,20 @@
   },
   "dependencies": {
     "@types/astring": "^1.3.0",
-    "@types/estree": "^0.0.42",
+    "@types/estree": "^0.0.45",
     "@types/lodash.clonedeep": "^4.5.6",
     "antlr4": "^4.7.2",
     "antlr4ts": "^0.5.0-alpha.3",
     "astring": "^1.4.3",
     "lodash.clonedeep": "^4.5.0",
-    "nodemon": "^1.19.4",
-    "ts-node": "^8.6.2",
-    "typescript": "^3.7.5"
+    "nodemon": "^2.0.4",
+    "ts-node": "^9.0.0",
+    "typescript": "3.9.x"
   },
   "devDependencies": {
-    "@types/node": "^12.12.27",
-    "acorn": "^8.0.1",
+    "@types/node": "^14.11.8",
+    "acorn": "^6.4.2",
     "antlr4ts-cli": "^0.5.0-alpha.3",
-    "prettier": "^1.19.1"
+    "prettier": "^2.1.2"
   }
 }

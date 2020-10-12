@@ -75,7 +75,7 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
       return v;
     }
   } else if (t instanceof Trait) {
-    return t.methods.find(fn => fn.name == member);
+    return t.methods.find((fn) => fn.name == member);
   }
 
   if (!(t instanceof TypeWithMethods)) {
@@ -84,7 +84,7 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
 
   const fns = t.typeMethods.methods.get(NoTrait);
   if (fns) {
-    const v = fns.find(fn => fn.name == member);
+    const v = fns.find((fn) => fn.name == member);
     if (v) {
       return v;
     }
@@ -93,7 +93,7 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
   let retFn: Function | undefined;
 
   for (const [trait, fns] of t.typeMethods.methods) {
-    const v = fns.find(fn => fn.name == member);
+    const v = fns.find((fn) => fn.name == member);
     if (v) {
       if (retFn) {
         throw new Error(
@@ -190,7 +190,7 @@ export class Context {
     }
     if (node instanceof ast.FunctionPtrType) {
       return new FunctionPointer(
-        node.params.map(p => this.getType(p.type!)),
+        node.params.map((p) => this.getType(p.type!)),
         this.getType(node.returns)
       );
     }
@@ -219,7 +219,7 @@ export class Context {
         typeNode instanceof StructFactory ||
         typeNode instanceof TraitFactory
       ) {
-        const templateParams = params.map(param => {
+        const templateParams = params.map((param) => {
           if (param instanceof ast.Expr) {
             throw new Error("Expression Templates not (yet) supported!");
           } else {
@@ -249,7 +249,7 @@ export class Context {
     this.variables.push({
       type,
       name,
-      id: this.tracker.getNextID()
+      id: this.tracker.getNextID(),
     });
   }
 
@@ -265,7 +265,7 @@ export class Context {
 
   getVariable(name: string): [TypeNode, number] {
     for (const ctx of this.getAllContexts()) {
-      const v = ctx.variables.find(e => name === e.name);
+      const v = ctx.variables.find((e) => name === e.name);
       if (v) {
         return [v.type, v.id];
       }
@@ -289,7 +289,7 @@ interface ResolvedType {
   struct: Struct;
 }
 
-export class StructFactory extends TypeWithMethods implements TemplateFactory {
+export class StructFactory extends TypeWithMethods {
   private resolvedStructs: ResolvedType[] = [];
   templateParams: TemplateParam[] = [];
 
@@ -328,11 +328,11 @@ export class StructFactory extends TypeWithMethods implements TemplateFactory {
       isStatic: fn.isStatic,
       name: fn.name,
       parameters: [...fn.parameters],
-      returns: fn.returns
+      returns: fn.returns,
     });
 
     if (fn.returns instanceof TemplateParam) {
-      const p = this.templateParams.findIndex(value => value == fn.returns);
+      const p = this.templateParams.findIndex((value) => value == fn.returns);
       if (p != -1) {
         newFn.returns = params[p];
       }
@@ -341,7 +341,7 @@ export class StructFactory extends TypeWithMethods implements TemplateFactory {
     for (let i = 0; i < fn.parameters.length; i++) {
       const param = fn.parameters[i];
       if (param instanceof TemplateParam) {
-        const p = this.templateParams.findIndex(value => value == param);
+        const p = this.templateParams.findIndex((value) => value == param);
         if (p != -1) {
           newFn.parameters[i] = params[p];
         }
@@ -405,7 +405,7 @@ export class StructFactory extends TypeWithMethods implements TemplateFactory {
 
     this.resolvedStructs.push({
       struct,
-      params: templateParams
+      params: templateParams,
     });
 
     const templateSubContext = this.context.addSubContext();
@@ -438,11 +438,7 @@ type TraitFactoryCachedElement = {
   trait: Trait;
 };
 
-interface TemplateFactory {
-  resolve(args: TypeNode[]): TypeNode;
-}
-
-export class TraitFactory extends Trait implements TemplateFactory {
+export class TraitFactory extends Trait {
   templateParams: TemplateParam[] = [];
 
   cache = new Array<TraitFactoryCachedElement>();
@@ -463,7 +459,7 @@ export class TraitFactory extends Trait implements TemplateFactory {
       const fnType = create(Function, {
         trait: this,
         name: fn.name.name,
-        parameters: fn.params.map(p => {
+        parameters: fn.params.map((p) => {
           if (!p.type) {
             // TODO: Not yet implemented
             throw new Error("Parameters currently require a defined type");
@@ -471,7 +467,7 @@ export class TraitFactory extends Trait implements TemplateFactory {
           return subContext.getType(p.type);
         }),
         returns: subContext.getType(fn.returns),
-        isStatic: false
+        isStatic: false,
       });
 
       this.methods.push(fnType);
@@ -482,7 +478,9 @@ export class TraitFactory extends Trait implements TemplateFactory {
     if (this.templateParams.length !== args.length) {
       throw new Error("Template invoked with incorrect number of arguments.");
     }
-    const cached = this.cache.find(e => e.args.every((t, i) => t === args[i]));
+    const cached = this.cache.find((e) =>
+      e.args.every((t, i) => t === args[i])
+    );
 
     if (cached) {
       return cached.trait;
@@ -491,7 +489,7 @@ export class TraitFactory extends Trait implements TemplateFactory {
     const trait = new Trait(this.name);
 
     const replaceTypeParam = (t: TypeNode) => {
-      const i = this.templateParams.findIndex(p => p === t);
+      const i = this.templateParams.findIndex((p) => p === t);
       if (i == -1) {
         return t;
       }
@@ -499,20 +497,20 @@ export class TraitFactory extends Trait implements TemplateFactory {
     };
 
     // build from scratch
-    trait.methods = this.methods.map(method =>
+    trait.methods = this.methods.map((method) =>
       create(Function, {
         isStatic: method.isStatic,
         name: method.name,
         belongsTo: method.belongsTo,
         trait,
         returns: replaceTypeParam(method.returns),
-        parameters: method.parameters.map(replaceTypeParam)
+        parameters: method.parameters.map(replaceTypeParam),
       })
     );
 
     this.cache.push({
       trait,
-      args
+      args,
     });
 
     return trait;
