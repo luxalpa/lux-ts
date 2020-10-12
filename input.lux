@@ -16,6 +16,9 @@ behavior MyStruct<T> {
     getAge() => T {
         return this.age
     }
+    run() => {
+            return
+    }
 }
 
 trait MyTrait {

@@ -116,7 +116,8 @@ export class TypeChecker {
             return context.getType(value.type!);
           }),
           returns: context.getType(n.returns),
-          isStatic: false
+          isStatic: false,
+          trait: tempTrait
         })
       );
     }
@@ -247,7 +248,8 @@ export class TypeChecker {
         ? parentContext.getType(n.returns)
         : parentContext.getTypeByString("Void"),
       isStatic,
-      belongsTo: behaviorTarget && [behaviorTarget, behaviorTrait]
+      belongsTo: behaviorTarget,
+      trait: behaviorTrait
     });
 
     context.owner = fnType;
@@ -283,7 +285,8 @@ export class TypeChecker {
         name: "log",
         parameters: [context.getTypeByString("Integer")],
         isStatic: false,
-        returns: context.getTypeByString("Void")
+        returns: context.getTypeByString("Void"),
+        trait: types.NoTrait
       })
     );
 

@@ -165,9 +165,7 @@ export class Transpiler {
       name: param.left.name
     }));
     if (fn.belongsTo) {
-      const [obj, trait] = fn.belongsTo;
-
-      if (!(obj instanceof types.Struct)) {
+      if (!(fn.belongsTo instanceof types.Struct)) {
         throw new Error(
           "Methods on non-structs not yet supported in transpiler"
         );
@@ -183,7 +181,7 @@ export class Transpiler {
             computed: false,
             object: {
               type: "Identifier",
-              name: obj.name
+              name: fn.belongsTo.name
             },
             property: {
               type: "Identifier",
@@ -192,7 +190,7 @@ export class Transpiler {
           },
           property: {
             type: "Identifier",
-            name: fnNameFromTrait(fn, trait)
+            name: fnNameFromTrait(fn, fn.trait)
           }
         },
         operator: "=",
@@ -661,14 +659,7 @@ function fnNameFromTrait(
 
 function suggestFunctionName(t: types.Function): string {
   // TODO: Namespacing
-  if (t.belongsTo) {
-    // TODO: Support traits
-
-    const [, trait] = t.belongsTo;
-
-    return fnNameFromTrait(t, trait);
-  }
-  return t.name;
+  return fnNameFromTrait(t, t.trait);
 }
 
 function getTypeName(t: types.TypeNode): string {

@@ -43,7 +43,8 @@ export class Function {
   parameters: TypeNode[];
   returns: TypeNode;
   isStatic: boolean;
-  belongsTo?: [TypeNode, Trait];
+  belongsTo?: TypeNode;
+  trait: Trait;
 }
 
 export class FunctionPointer extends TypeNode {
@@ -73,6 +74,8 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
     if (v) {
       return v;
     }
+  } else if (t instanceof Trait) {
+    return t.functions.find(fn => fn.name == member);
   }
 
   if (!(t instanceof TypeWithMethods)) {
@@ -318,6 +321,7 @@ export class StructFactory extends TypeWithMethods {
   ) {
     const newFn: Function = create(Function, {
       belongsTo: fn.belongsTo,
+      trait: fn.trait,
       isStatic: fn.isStatic,
       name: fn.name,
       parameters: [...fn.parameters],
