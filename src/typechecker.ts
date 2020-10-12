@@ -2,6 +2,7 @@ import { ast } from "./ast";
 import * as types from "./typenodes";
 import { TypeNode } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
+import { IdentityTracker } from "./identityTracker";
 
 interface ResolvedFunctionInfo {
   context: types.Context;
@@ -11,6 +12,7 @@ interface ResolvedFunctionInfo {
 
 export class TypeChecker {
   typemap: TypeMap;
+  tracker = new IdentityTracker();
   constructor(private tree: ast.Program) {}
 
   check(): {
@@ -18,7 +20,7 @@ export class TypeChecker {
   } {
     this.typemap = new Map<ast.Node, types.TypeNode>();
 
-    const mainCtx = new types.Context();
+    const mainCtx = new types.Context(this.tracker);
     this.addExternals(mainCtx);
 
     const mainScope = {
@@ -114,8 +116,7 @@ export class TypeChecker {
             return context.getType(value.type!);
           }),
           returns: context.getType(n.returns),
-          isStatic: false,
-          belongsTo: tempTrait
+          isStatic: false
         })
       );
     }
@@ -155,6 +156,7 @@ export class TypeChecker {
         const t = context.getType(behavior.trait);
         if (t instanceof types.Trait) {
           trait = t;
+          this.typemap.set(behavior.trait, t);
         } else {
           throw new Error(
             `Methods must be added for traits, but ${getTypeName(
@@ -244,7 +246,7 @@ export class TypeChecker {
         ? parentContext.getType(n.returns)
         : parentContext.getTypeByString("Void"),
       isStatic,
-      belongsTo: behaviorTarget
+      belongsTo: behaviorTarget && [behaviorTarget, behaviorTrait]
     });
 
     context.owner = fnType;
@@ -412,8 +414,9 @@ export class TypeChecker {
   }
 
   visitIdentifierExpr(n: ast.IdentifierExpr, context: types.Context) {
-    let v = context.getVariable(n.id.name);
+    const [v, id] = context.getVariable(n.id.name);
     this.typemap.set(n, v);
+    this.tracker.track(n, id);
   }
 
   visitRefExpr(n: ast.RefExpr, context: types.Context) {

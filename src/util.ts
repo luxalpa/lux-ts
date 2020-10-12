@@ -13,7 +13,11 @@ export function getFromTypemap<T extends types.TypeNode>(
 ): T {
   const n = typeMap.get(node);
   if (n === undefined) {
-    throw new Error("Typemap: Type is undefined");
+    throw new Error(
+      `Typemap: Type is undefined: ${node.constructor.name}${JSON.stringify(
+        node
+      )}`
+    );
   }
   return n as T;
 }

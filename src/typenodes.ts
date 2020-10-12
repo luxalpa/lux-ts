@@ -2,6 +2,7 @@ import { ast } from "./ast";
 import { create, TypeMap } from "./util";
 import { getTypeName, TypeChecker } from "./typechecker";
 import cloneDeep from "lodash.clonedeep";
+import { IdentityTracker } from "./identityTracker";
 
 export class TypeMethods {
   methods = new Map<Trait, Function[]>();
@@ -40,7 +41,7 @@ export class Function {
   parameters: TypeNode[];
   returns: TypeNode;
   isStatic: boolean;
-  belongsTo?: TypeNode;
+  belongsTo?: [TypeNode, Trait];
 }
 
 export class FunctionPointer extends TypeNode {
@@ -130,26 +131,27 @@ export class TemplateParam extends TypeNode {}
 interface ContextSymbol {
   name: string;
   type: TypeNode;
+  id: number;
 }
 
 export class Context {
   parent?: Context;
-  types: Map<string, TypeNode>;
+  types: Map<string, [TypeNode, number]>;
   variables: ContextSymbol[];
   owner?: Function;
 
-  constructor(parent?: Context) {
-    this.types = new Map<string, TypeNode>();
+  constructor(private tracker: IdentityTracker, parent?: Context) {
+    this.types = new Map<string, [TypeNode, number]>();
     this.variables = [];
     this.parent = parent;
   }
 
   addSubContext(): Context {
-    return new Context(this);
+    return new Context(this.tracker, this);
   }
 
   addType(name: string, type: TypeNode) {
-    this.types.set(name, type);
+    this.types.set(name, [type, this.tracker.getNextID()]);
   }
 
   *getAllContexts(): IterableIterator<Context> {
@@ -161,9 +163,12 @@ export class Context {
 
   getStructFactory(name: string): StructFactory {
     for (const ctx of this.getAllContexts()) {
-      const typeNode = ctx.types.get(name);
-      if (typeNode instanceof StructFactory) {
-        return typeNode;
+      const result = ctx.types.get(name);
+      if (result) {
+        const [typeNode, id] = result;
+        if (typeNode instanceof StructFactory) {
+          return typeNode;
+        }
       }
     }
     throw new Error(`Struct '${name}' not found`);
@@ -190,9 +195,12 @@ export class Context {
 
   getTypeByString(name: string, params: ast.Type[] = []): TypeNode {
     let typeNode: TypeNode | undefined;
+    let id: number;
+
     for (const ctx of this.getAllContexts()) {
-      typeNode = ctx.types.get(name);
-      if (typeNode) {
+      const result = ctx.types.get(name);
+      if (result) {
+        [typeNode, id] = result;
         break;
       }
     }
@@ -221,16 +229,17 @@ export class Context {
   addVariable(name: string, type: TypeNode) {
     for (const [i, v] of this.variables.entries()) {
       if (v.name === name) {
-        if (!(v.type instanceof Function)) {
-          throw new Error(`Variable ${name} is already defined`);
-        } else {
-          // TODO: Make sure we don't define the same type twice!
-        }
+        // if (!(v.type instanceof Function)) {
+        throw new Error(`Variable ${name} is already defined`);
+        // } else {
+        //   TODO: Make sure we don't define the same type twice! This is implemented for overloads which are currently not supported
+        // }
       }
     }
     this.variables.push({
       type,
-      name
+      name,
+      id: this.tracker.getNextID()
     });
   }
 
@@ -244,19 +253,20 @@ export class Context {
     }
   }
 
-  getVariable(name: string): TypeNode {
+  getVariable(name: string): [TypeNode, number] {
     for (const ctx of this.getAllContexts()) {
       const v = ctx.variables.find(e => name === e.name);
       if (v) {
-        return v.type;
+        return [v.type, v.id];
       }
 
-      const type = ctx.types.get(name);
-      if (type) {
+      const result = ctx.types.get(name);
+      if (result) {
+        const [type, id] = result;
         if (type instanceof StructFactory) {
-          return new MetaType(type.abstractStruct()); // Todo: Implement this for static generic types
+          return [new MetaType(type.abstractStruct()), id]; // Todo: Implement this for static generic types
         }
-        return new MetaType(type);
+        return [new MetaType(type), id];
       }
     }
 

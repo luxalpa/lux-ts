@@ -4,12 +4,27 @@ import * as types from "./typenodes";
 import { getFromTypemap } from "./util";
 
 export class Transpiler {
+  // functionNameMap = new Map<types.Function, string>();
   constructor(private typemap: Map<ast.Node, types.TypeNode>) {}
 
   transpile(program: ast.Program): ESTree.Program {
     let stmts: ESTree.Statement[] = [];
     let structConstrStmts: ESTree.Statement[] = [];
-    for (let declaration of program.declarations) {
+
+    // for (const behaviorDec of program.declarations.filter(
+    //   (d: ast.Declaration): d is ast.Behavior => d instanceof ast.Behavior
+    // )) {
+    //   const trait = behaviorDec.trait
+    //     ? (getFromTypemap(this.typemap, behaviorDec.trait) as types.Trait)
+    //     : types.NoTrait;
+    //
+    //   for (const fn of behaviorDec.functions) {
+    //     const fnType = getFromTypemap(this.typemap, fn) as types.Function;
+    //     this.functionNameMap.set(fnType, fnNameFromTrait(fnType, trait));
+    //   }
+    // }
+
+    for (const declaration of program.declarations) {
       if (declaration instanceof ast.StructDec) {
         // These are being done separately
         structConstrStmts.push(this.makeStruct(declaration));
@@ -102,20 +117,23 @@ export class Transpiler {
       suggestedName = suggestFunctionName(t);
     }
     // TODO: This disambiguates functions for traits, but is currently not correct (since it splits generics)
-    /*const cached = this.functionNameMap.get(t);
-    if (cached) {
-      return cached;
-    }
-    const originalSuggestedName = suggestedName;
+    // const cached = this.functionNameMap.get(t);
+    // if (cached) {
+    //   console.log("Function found!", t, cached);
+    //   return cached;
+    // }
 
-    let i = 1;
-    while (this.functionNamesUsed.has(suggestedName)) {
-      suggestedName = `${originalSuggestedName}_${i}`;
-      i++;
-    }
-
-    this.functionNamesUsed.add(suggestedName);
-    this.functionNameMap.set(t, suggestedName);*/
+    // console.log("Function not defined :/", t);
+    // const originalSuggestedName = suggestedName;
+    //
+    // let i = 1;
+    // while (this.functionNamesUsed.has(suggestedName)) {
+    //   suggestedName = `${originalSuggestedName}_${i}`;
+    //   i++;
+    // }
+    //
+    // this.functionNamesUsed.add(suggestedName);
+    // this.functionNameMap.set(t, suggestedName);
     return suggestedName;
   }
 
@@ -147,7 +165,9 @@ export class Transpiler {
       name: param.left.name
     }));
     if (fn.belongsTo) {
-      if (!(fn.belongsTo instanceof types.Struct)) {
+      const [obj, trait] = fn.belongsTo;
+
+      if (!(obj instanceof types.Struct)) {
         throw new Error(
           "Methods on non-structs not yet supported in transpiler"
         );
@@ -163,7 +183,7 @@ export class Transpiler {
             computed: false,
             object: {
               type: "Identifier",
-              name: fn.belongsTo.name
+              name: obj.name
             },
             property: {
               type: "Identifier",
@@ -172,7 +192,7 @@ export class Transpiler {
           },
           property: {
             type: "Identifier",
-            name: fn.name
+            name: fnNameFromTrait(fn, trait)
           }
         },
         operator: "=",
@@ -629,11 +649,24 @@ function defaultValueForType(t: types.TypeNode): ESTree.Expression {
   }
 }
 
+function fnNameFromTrait(
+  fn: types.Function,
+  trait: types.Trait = types.NoTrait
+): string {
+  if (trait == types.NoTrait) {
+    return fn.name;
+  }
+  return `${fn.name}$${trait.name}`;
+}
+
 function suggestFunctionName(t: types.Function): string {
   // TODO: Namespacing
   if (t.belongsTo) {
     // TODO: Support traits
-    return t.name;
+
+    const [, trait] = t.belongsTo;
+
+    return fnNameFromTrait(t, trait);
   }
   return t.name;
 }
