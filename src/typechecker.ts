@@ -157,6 +157,7 @@ export class TypeChecker {
         if (t instanceof types.Trait) {
           trait = t;
           this.typemap.set(behavior.trait, t);
+          type.typeMethods.implementedTraits.add(t);
         } else {
           throw new Error(
             `Methods must be added for traits, but ${getTypeName(
@@ -636,6 +637,14 @@ export function isTypeEqual(
   }
 
   // TODO: Implement traits
+
+  if (strong instanceof types.Trait) {
+    if (weak instanceof types.TypeWithMethods) {
+      if (weak.typeMethods.implementedTraits.has(strong)) {
+        return true;
+      }
+    }
+  }
 
   if (strong instanceof types.RefType) {
     if (!(weak instanceof types.RefType)) {

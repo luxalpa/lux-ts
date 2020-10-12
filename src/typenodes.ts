@@ -6,12 +6,14 @@ import { IdentityTracker } from "./identityTracker";
 
 export class TypeMethods {
   methods = new Map<Trait, Function[]>();
+  implementedTraits = new Set<Trait>();
 
   addMethod(trait: Trait, fn: Function) {
     const fns = this.methods.get(trait) || [];
     fns.push(fn);
     if (!this.methods.has(trait)) {
       this.methods.set(trait, fns);
+      this.implementedTraits.add(trait);
     }
   }
 }
