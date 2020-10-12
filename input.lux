@@ -21,11 +21,11 @@ behavior MyStruct<T> {
     }
 }
 
-trait MyTrait {
-    run() => Void
+trait MyTrait<T: Type> {
+    run() => T
 }
 
-behavior MyStruct<T> for MyTrait {
+behavior MyStruct<T> for MyTrait<Void> {
     run() => {
         return
     }
@@ -43,6 +43,6 @@ function main() => {
     log(*ptr)
     log(obj.age)
 
-    x: MyTrait = obj
+    x: MyTrait<Void> = obj
     x.run()
 }

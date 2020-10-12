@@ -96,7 +96,10 @@ export class TypeChecker {
       } else if (n instanceof ast.FunctionDec) {
         functions.push(n);
       } else if (n instanceof ast.Trait) {
-        const trait = new types.Trait(n.name);
+        const trait =
+          n.templateParams.length == 0
+            ? new types.Trait(n.name)
+            : new types.TraitFactory(n.name);
         context.addType(n.name, trait);
         traits.push([trait, n]);
       }
@@ -109,17 +112,21 @@ export class TypeChecker {
 
     // Traits
     for (const [tempTrait, node] of traits) {
-      tempTrait.functions = node.functions.map(n =>
-        create(types.Function, {
-          name: n.name.name,
-          parameters: n.params.map(value => {
-            return context.getType(value.type!);
-          }),
-          returns: context.getType(n.returns),
-          isStatic: false,
-          trait: tempTrait
-        })
-      );
+      if (tempTrait instanceof types.TraitFactory) {
+        tempTrait.init(node, context);
+      } else {
+        tempTrait.methods = node.functions.map(n =>
+          create(types.Function, {
+            name: n.name.name,
+            parameters: n.params.map(value => {
+              return context.getType(value.type!);
+            }),
+            returns: context.getType(n.returns),
+            isStatic: false,
+            trait: tempTrait
+          })
+        );
+      }
     }
 
     // Methods
@@ -177,7 +184,7 @@ export class TypeChecker {
         );
 
         if (trait !== types.NoTrait) {
-          const traitFn = trait.functions.find(
+          const traitFn = trait.methods.find(
             traitFn => traitFn.name === resolvedFn.fnType.name
           );
           if (!traitFn) {
@@ -204,7 +211,7 @@ export class TypeChecker {
           continue;
         }
         const fns = t.typeMethods.methods.get(trait)!;
-        if (fns.length != trait.functions.length) {
+        if (fns.length != trait.methods.length) {
           throw new Error(
             `Not all functions from trait ${
               trait.name
@@ -268,9 +275,9 @@ export class TypeChecker {
 
     this.typemap.set(n, fnType);
     return {
-      context: context,
+      context,
       fnType,
-      body: n.body!
+      body: n.body
     };
   }
 

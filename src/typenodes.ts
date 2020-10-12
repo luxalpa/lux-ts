@@ -54,7 +54,7 @@ export class FunctionPointer extends TypeNode {
 }
 
 export class Trait {
-  functions: Function[] = [];
+  methods: Function[] = [];
   constructor(public name: string) {}
 }
 
@@ -75,7 +75,7 @@ export function getMember(t: TypeNode, member: string): TypeNode | undefined {
       return v;
     }
   } else if (t instanceof Trait) {
-    return t.functions.find(fn => fn.name == member);
+    return t.methods.find(fn => fn.name == member);
   }
 
   if (!(t instanceof TypeWithMethods)) {
@@ -214,18 +214,23 @@ export class Context {
       throw new Error(`Type "${name}" not found`);
     }
 
-    if (typeNode instanceof StructFactory && params.length > 0) {
-      const templateParams = params.map(param => {
-        if (param instanceof ast.Expr) {
-          throw new Error("Expression Templates not yet supported!");
-        } else {
-          return this.getType(param);
-        }
-      });
+    if (params.length > 0) {
+      if (
+        typeNode instanceof StructFactory ||
+        typeNode instanceof TraitFactory
+      ) {
+        const templateParams = params.map(param => {
+          if (param instanceof ast.Expr) {
+            throw new Error("Expression Templates not (yet) supported!");
+          } else {
+            return this.getType(param);
+          }
+        });
 
-      return typeNode.resolve(templateParams);
-    } else if (params.length > 0) {
-      throw new Error("Can't have Template Parameters on non-struct type");
+        return typeNode.resolve(templateParams);
+      } else {
+        throw new Error("Can't have Template Parameters on this type");
+      }
     }
 
     return typeNode;
@@ -279,14 +284,12 @@ export class Context {
   }
 }
 
-type TemplateParams = TypeNode[];
-
 interface ResolvedType {
-  params: TemplateParams;
+  params: TypeNode[];
   struct: Struct;
 }
 
-export class StructFactory extends TypeWithMethods {
+export class StructFactory extends TypeWithMethods implements TemplateFactory {
   private resolvedStructs: ResolvedType[] = [];
   templateParams: TemplateParam[] = [];
 
@@ -316,7 +319,7 @@ export class StructFactory extends TypeWithMethods {
   addMethodToStruct(
     trait: Trait,
     fn: Function,
-    params: TemplateParams,
+    params: TypeNode[],
     struct: Struct
   ) {
     const newFn: Function = create(Function, {
@@ -348,7 +351,7 @@ export class StructFactory extends TypeWithMethods {
     struct.typeMethods.addMethod(trait, newFn);
   }
 
-  private findCached(templateParams: TemplateParams): Struct | undefined {
+  private findCached(templateParams: TypeNode[]): Struct | undefined {
     const resolvedType = this.resolvedStructs.find(({ params }) => {
       if (params.length !== templateParams.length) {
         return false;
@@ -372,7 +375,7 @@ export class StructFactory extends TypeWithMethods {
     return this.resolve(this.templateParams);
   }
 
-  resolve(templateParams: TemplateParams): Struct {
+  resolve(templateParams: TypeNode[]): Struct {
     const cached = this.findCached(templateParams);
     if (cached !== undefined) {
       return cached;
@@ -427,5 +430,91 @@ export class StructFactory extends TypeWithMethods {
     }
 
     return struct;
+  }
+}
+
+type TraitFactoryCachedElement = {
+  args: TypeNode[];
+  trait: Trait;
+};
+
+interface TemplateFactory {
+  resolve(args: TypeNode[]): TypeNode;
+}
+
+export class TraitFactory extends Trait implements TemplateFactory {
+  templateParams: TemplateParam[] = [];
+
+  cache = new Array<TraitFactoryCachedElement>();
+
+  constructor(name: string) {
+    super(name);
+  }
+
+  init(node: ast.Trait, context: Context) {
+    const subContext = context.addSubContext();
+    for (let templateParam of node.templateParams) {
+      const p = new TemplateParam();
+      subContext.addType(templateParam.left.name, p);
+      this.templateParams.push(p);
+    }
+
+    for (const fn of node.functions) {
+      const fnType = create(Function, {
+        trait: this,
+        name: fn.name.name,
+        parameters: fn.params.map(p => {
+          if (!p.type) {
+            // TODO: Not yet implemented
+            throw new Error("Parameters currently require a defined type");
+          }
+          return subContext.getType(p.type);
+        }),
+        returns: subContext.getType(fn.returns),
+        isStatic: false
+      });
+
+      this.methods.push(fnType);
+    }
+  }
+
+  resolve(args: TypeNode[]): Trait {
+    if (this.templateParams.length !== args.length) {
+      throw new Error("Template invoked with incorrect number of arguments.");
+    }
+    const cached = this.cache.find(e => e.args.every((t, i) => t === args[i]));
+
+    if (cached) {
+      return cached.trait;
+    }
+
+    const trait = new Trait(this.name);
+
+    const replaceTypeParam = (t: TypeNode) => {
+      const i = this.templateParams.findIndex(p => p === t);
+      if (i == -1) {
+        return t;
+      }
+      return args[i];
+    };
+
+    // build from scratch
+    trait.methods = this.methods.map(method =>
+      create(Function, {
+        isStatic: method.isStatic,
+        name: method.name,
+        belongsTo: method.belongsTo,
+        trait,
+        returns: replaceTypeParam(method.returns),
+        parameters: method.parameters.map(replaceTypeParam)
+      })
+    );
+
+    this.cache.push({
+      trait,
+      args
+    });
+
+    return trait;
   }
 }
