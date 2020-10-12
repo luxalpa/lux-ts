@@ -246,10 +246,9 @@ export class Context {
 
   getVariable(name: string): TypeNode {
     for (const ctx of this.getAllContexts()) {
-      for (const v of ctx.variables) {
-        if (name === v.name) {
-          return v.type;
-        }
+      const v = ctx.variables.find(e => name === e.name);
+      if (v) {
+        return v.type;
       }
 
       const type = ctx.types.get(name);
@@ -275,6 +274,22 @@ interface ResolvedType {
 export class StructFactory extends TypeWithMethods {
   private resolvedStructs: ResolvedType[] = [];
   templateParams: TemplateParam[] = [];
+
+  constructor(
+    private typeChecker: TypeChecker,
+    private structDecNode: ast.StructDec,
+    private context: Context,
+    private typemap: TypeMap
+  ) {
+    super();
+    for (let param of this.structDecNode.templateParams) {
+      this.templateParams.push(new TemplateParam());
+    }
+  }
+
+  getName(): string {
+    return this.structDecNode.name.name;
+  }
 
   addMethod(trait: Trait, fn: Function) {
     this.typeMethods.addMethod(trait, fn);
@@ -315,18 +330,6 @@ export class StructFactory extends TypeWithMethods {
     }
 
     struct.typeMethods.addMethod(trait, newFn);
-  }
-
-  constructor(
-    private typeChecker: TypeChecker,
-    private structDecNode: ast.StructDec,
-    private context: Context,
-    private typemap: TypeMap
-  ) {
-    super();
-    for (let param of this.structDecNode.templateParams) {
-      this.templateParams.push(new TemplateParam());
-    }
   }
 
   private findCached(templateParams: TemplateParams): Struct | undefined {

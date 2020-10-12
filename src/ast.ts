@@ -8,6 +8,7 @@ export namespace ast {
     Subtraction = "-",
     Multiplication = "*",
     Division = "/",
+    Modulo = "%",
     Equals = "=",
     Unequals = "!="
   }
@@ -47,6 +48,7 @@ export namespace ast {
 
   export class Behavior extends Node {
     type: string;
+    trait?: Type;
     templateParams: string[];
     functions: FunctionDec[];
   }

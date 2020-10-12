@@ -46,8 +46,9 @@ export class TypeChecker {
     const behaviors = new Array<ast.Behavior>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
-    const structs = new Array<[types.Struct, types.StructFactory]>();
+    const plainStructs = new Array<[types.Struct, types.StructFactory]>();
     const traits = new Array<[types.Trait, ast.Trait]>();
+    const traitObjects = new Array<types.TypeWithMethods>();
 
     // First we parse the Structs, Enums and Aliases to get the type names
     for (const n of this.tree.declarations) {
@@ -62,12 +63,17 @@ export class TypeChecker {
           const tempStruct = new types.Struct(n.name.name);
 
           context.addType(n.name.name, tempStruct);
-          structs.push([tempStruct, struct]);
+          plainStructs.push([tempStruct, struct]);
+          traitObjects.push(tempStruct);
         } else {
-          context.addType(
-            n.name.name,
-            new types.StructFactory(this, n, context, this.typemap)
+          const factory = new types.StructFactory(
+            this,
+            n,
+            context,
+            this.typemap
           );
+          context.addType(n.name.name, factory);
+          traitObjects.push(factory);
         }
       } else if (n instanceof ast.EnumDec) {
         context.addType(
@@ -95,7 +101,7 @@ export class TypeChecker {
     }
 
     // Structs
-    for (const [tempStruct, structFactory] of structs) {
+    for (const [tempStruct, structFactory] of plainStructs) {
       Object.assign(tempStruct, structFactory.resolve([]));
     }
 
@@ -141,7 +147,21 @@ export class TypeChecker {
       }
 
       if (!(type instanceof types.TypeWithMethods)) {
-        throw new Error(`Can't define behavior on type ${getTypeName(type)}`);
+        throw new Error(`Can't define methods on type ${getTypeName(type)}`);
+      }
+
+      let trait = types.NoTrait;
+      if (behavior.trait) {
+        const t = context.getType(behavior.trait);
+        if (t instanceof types.Trait) {
+          trait = t;
+        } else {
+          throw new Error(
+            `Methods must be added for traits, but ${getTypeName(
+              t
+            )} is not a trait.`
+          );
+        }
       }
 
       for (const fn of behavior.functions) {
@@ -149,12 +169,48 @@ export class TypeChecker {
           fn,
           behaviorContext,
           type,
-          types.NoTrait
+          trait
         );
+
+        if (trait !== types.NoTrait) {
+          const traitFn = trait.functions.find(
+            traitFn => traitFn.name === resolvedFn.fnType.name
+          );
+          if (!traitFn) {
+            throw new Error(
+              `Function ${resolvedFn.fnType.name} does not exist on trait ${trait.name}`
+            );
+          }
+          if (!isTypeEqual(traitFn, resolvedFn.fnType)) {
+            throw new Error(
+              `Function ${resolvedFn.fnType.name} has a different signature than on trait ${trait.name}`
+            );
+          }
+        }
+
         resolvedFunctions.push(resolvedFn);
       }
     }
 
+    // trait check if all methods are implemented
+
+    for (const t of traitObjects) {
+      for (const trait of t.typeMethods.methods.keys()) {
+        if (trait == types.NoTrait) {
+          continue;
+        }
+        const fns = t.typeMethods.methods.get(trait)!;
+        if (fns.length != trait.functions.length) {
+          throw new Error(
+            `Not all functions from trait ${
+              trait.name
+            } have been implemented on ${getTypeName(t as types.TypeNode)}`
+          );
+        }
+      }
+    }
+
+    // functions
     for (const fn of functions) {
       const fnInfo = this.parseFunctionDecNode(fn, context);
       resolvedFunctions.push(fnInfo);
@@ -598,26 +654,41 @@ export function isTypeEqual(
 
     const fn = weak.ref;
 
-    if (!isTypeEqual(strong.returns!, fn.returns!)) {
+    return isFunctionEqual(strong, fn);
+  }
+
+  if (strong instanceof types.Function) {
+    if (!(weak instanceof types.Function)) {
       return false;
     }
 
-    if (strong.parameters.length != fn.parameters.length) {
-      return false;
-    }
-
-    // TODO: Support methods (static and with receiver)
-
-    for (let i = 0; i < strong.parameters.length; i++) {
-      if (!isTypeEqual(strong.parameters[i], fn.parameters[i])) {
-        return false;
-      }
-    }
-
-    return true;
+    return isFunctionEqual(strong, weak);
   }
 
   return false;
+}
+
+function isFunctionEqual(
+  a: types.Function | types.FunctionPointer,
+  b: types.Function
+) {
+  if (!isTypeEqual(a.returns!, b.returns!)) {
+    return false;
+  }
+
+  if (a.parameters.length != b.parameters.length) {
+    return false;
+  }
+
+  // TODO: Support methods (static and with receiver)
+
+  for (let i = 0; i < a.parameters.length; i++) {
+    if (!isTypeEqual(a.parameters[i], b.parameters[i])) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function getTypeName(t: TypeNode): string {
@@ -635,6 +706,9 @@ export function getTypeName(t: TypeNode): string {
   }
   if (t instanceof types.Struct) {
     return t.name;
+  }
+  if (t instanceof types.StructFactory) {
+    return t.getName();
   }
   if (t instanceof types.Function) {
     return `function (${t.parameters

@@ -10,9 +10,6 @@ struct OtherStruct<T: Type> {
 }
 
 behavior MyStruct<T> {
-    run() => Void {
-        return
-    }
     setAge(param: T) => {
         this.age = param
     }
@@ -23,6 +20,12 @@ behavior MyStruct<T> {
 
 trait MyTrait {
     run() => Void
+}
+
+behavior MyStruct<T> for MyTrait {
+    run() => {
+        return
+    }
 }
 
 function main() => {

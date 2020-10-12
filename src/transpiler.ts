@@ -301,6 +301,7 @@ export class Transpiler {
   visitFunctionCallExpr(e: ast.FunctionCallExpr): ESTree.SimpleCallExpression {
     if (e.fn instanceof ast.MemberExpr) {
       const fnType = getFromTypemap<types.Function>(this.typemap, e.fn);
+
       return {
         type: "CallExpression",
         callee: {

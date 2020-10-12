@@ -432,9 +432,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .map(node => node.text);
     }
 
+    const plainType = ctx.plainType();
+
     return create(ast.Behavior, {
       type: ctx.ID().text,
       templateParams,
+      trait: plainType ? this.visit(plainType) : undefined,
       functions: ctx
         .behaviorContent()
         .behaviorFnDef()

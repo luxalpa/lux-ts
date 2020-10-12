@@ -55,7 +55,7 @@ typeDef
     | 'enum' ID tmplDefParamList? enumScope        # enumDec
     | 'struct' ID tmplDefParamList? structBody     # structDec
     | 'alias' ID tmplDefParamList? ':' vtype       # aliasDec
-    | 'behavior' ID tmplBehavior? behaviorContent  # behaviorDec
+    | 'behavior' ID tmplBehavior? ('for' plainType)? behaviorContent  # behaviorDec
     | 'trait' ID tmplDefParamList? traitBody       # traitDec
     ;
 
