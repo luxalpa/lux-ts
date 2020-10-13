@@ -1,4 +1,4 @@
-import { basicTests, otherTests } from "./tests/basic-tests";
+import { basicTests } from "./tests/basic-tests";
 import { runCode } from "./lib";
 import { isDeepStrictEqual } from "util";
 import chalk from "chalk";
@@ -23,11 +23,16 @@ export class Tester {
         console.log(`${testNum} ${name} succeeded ` + chalk.green("✔️"));
       } else {
         console.log(`${testNum} ${name} failed ${chalk.red("✖️")}`);
-        console.log(
-          `   expected: ${JSON.stringify(
-            test.expectedOutput
-          )}\n   got: ${JSON.stringify(test.output)}`
-        );
+
+        if (test.lastError) {
+          console.error(test.lastError);
+        } else {
+          console.log(
+            `   expected: ${JSON.stringify(
+              test.expectedOutput
+            )}\n   got: ${JSON.stringify(test.output)}`
+          );
+        }
       }
     }
   }
@@ -88,4 +93,4 @@ export function TestProgram(units: TestUnit[]) {
   tester.runAllTests();
 }
 
-TestProgram([basicTests, otherTests]);
+TestProgram([basicTests]);
