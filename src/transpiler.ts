@@ -3,26 +3,44 @@ import * as ESTree from "estree";
 import * as types from "./typenodes";
 import { getFromTypemap } from "./util";
 
+export interface TranspilerOptions {
+  generateMainStmt: boolean;
+  generateLogFunction: boolean;
+}
+
+const defaultOptions: TranspilerOptions = {
+  generateLogFunction: true,
+  generateMainStmt: true,
+};
+
 export class Transpiler {
-  // functionNameMap = new Map<types.Function, string>();
   constructor(private typemap: Map<ast.Node, types.TypeNode>) {}
 
-  transpile(program: ast.Program): ESTree.Program {
+  private handleDefaultOptions(
+    options: Partial<TranspilerOptions>
+  ): TranspilerOptions {
+    let option: keyof TranspilerOptions;
+    for (option in defaultOptions) {
+      if (!defaultOptions.hasOwnProperty(option)) {
+        continue;
+      }
+
+      if (options[option] === undefined) {
+        options[option] = defaultOptions[option];
+      }
+    }
+
+    return options as TranspilerOptions;
+  }
+
+  transpile(
+    program: ast.Program,
+    options: Partial<TranspilerOptions> = defaultOptions
+  ): ESTree.Program {
+    const alloptions = this.handleDefaultOptions(options);
+
     let stmts: ESTree.Statement[] = [];
     let structConstrStmts: ESTree.Statement[] = [];
-
-    // for (const behaviorDec of program.declarations.filter(
-    //   (d: ast.Declaration): d is ast.Behavior => d instanceof ast.Behavior
-    // )) {
-    //   const trait = behaviorDec.trait
-    //     ? (getFromTypemap(this.typemap, behaviorDec.trait) as types.Trait)
-    //     : types.NoTrait;
-    //
-    //   for (const fn of behaviorDec.functions) {
-    //     const fnType = getFromTypemap(this.typemap, fn) as types.Function;
-    //     this.functionNameMap.set(fnType, fnNameFromTrait(fnType, trait));
-    //   }
-    // }
 
     for (const declaration of program.declarations) {
       if (declaration instanceof ast.StructDec) {
@@ -49,6 +67,14 @@ export class Transpiler {
     }
 
     stmts.unshift(...structConstrStmts);
+
+    if (alloptions.generateLogFunction) {
+      stmts.push(generateLogFn());
+    }
+
+    if (alloptions.generateMainStmt) {
+      stmts.push(generateMainFnCall());
+    }
 
     return {
       type: "Program",
@@ -688,4 +714,66 @@ function getTypeName(t: types.TypeNode): string {
     default:
       return "unk";
   }
+}
+
+function generateMainFnCall(): ESTree.ExpressionStatement {
+  return {
+    type: "ExpressionStatement",
+    expression: {
+      type: "CallExpression",
+      optional: false,
+      callee: {
+        type: "Identifier",
+        name: "main",
+      },
+      arguments: [],
+    },
+  };
+}
+
+function generateLogFn(): ESTree.FunctionDeclaration {
+  return {
+    type: "FunctionDeclaration",
+    id: {
+      type: "Identifier",
+      name: "log",
+    },
+    params: [
+      {
+        type: "Identifier",
+        name: "value",
+      },
+    ],
+    body: {
+      type: "BlockStatement",
+      body: [
+        {
+          type: "ExpressionStatement",
+          expression: {
+            type: "CallExpression",
+            arguments: [
+              {
+                type: "Identifier",
+                name: "value",
+              },
+            ],
+            optional: false,
+            callee: {
+              type: "MemberExpression",
+              optional: false,
+              property: {
+                type: "Identifier",
+                name: "log",
+              },
+              computed: false,
+              object: {
+                type: "Identifier",
+                name: "console",
+              },
+            },
+          },
+        },
+      ],
+    },
+  };
 }

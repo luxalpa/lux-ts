@@ -1,43 +1,44 @@
-import { CommonTokenStream } from "antlr4ts";
+import fs from "fs";
+import yargs from "yargs";
+import { compileCode } from "./lib";
 
-import { LuxLexer } from "../parser-ts/LuxLexer";
-import { LuxParser } from "../parser-ts/LuxParser";
-import { ParseTreeVisitor } from "./parseTreeVisitor";
+// const input = fs.readFileSync("./input.lux");
+//
+// const code = compileCode(input.toString());
+// console.log(code);
+//
+// console.log(eval(code));
 
-import { generate } from "astring";
-import { Transpiler } from "./transpiler";
-import * as fs from "fs";
-import { TypeChecker } from "./typechecker";
-import { CharStreams } from "antlr4ts/CharStreams";
+function main() {
+  const argv = yargs(process.argv.slice(2))
+    .options({
+      build: { type: "string", alias: "b", describe: "Build project in path" },
+      run: { type: "string", alias: "r", describe: "Run project in path" },
+      test: {
+        describe: "Run tests",
+      },
+    })
+    .help().argv;
 
-const input = fs.readFileSync("./input.lux");
-const inputStream = CharStreams.fromString(input.toString());
-const lexer = new LuxLexer(inputStream);
-const tokenStream = new CommonTokenStream(lexer);
-const parser = new LuxParser(tokenStream) as any;
-parser.buildParseTrees = true;
-try {
-  const tree = parser.program();
+  if (argv.build) {
+    const input = fs.readFileSync(argv.build);
+    const code = compileCode(input.toString());
+    console.log(code);
+    return;
+  }
 
-  const visitor = new ParseTreeVisitor();
-  const node = tree.accept(visitor);
+  if (argv.run) {
+    const input = fs.readFileSync(argv.run);
+    const code = compileCode(input.toString());
+    console.log(code);
+    console.log("=== RUNNING ===");
+    console.log(eval(code));
+    return;
+  }
 
-  const typeChecker = new TypeChecker(node);
-  const { typemap } = typeChecker.check();
-
-  const transpiler = new Transpiler(typemap);
-  const v = transpiler.transpile(node);
-
-  const code = generate(v as any);
-
-  console.log(code);
-  (function () {
-    function log(text: string) {
-      console.log(text);
-    }
-
-    eval(code + "; main();");
-  })();
-} catch (e) {
-  console.error(e);
+  if (argv.test) {
+    return;
+  }
 }
+
+main();
