@@ -45,6 +45,7 @@ export function basicTests(test: TestFn) {
     `function main() => Integer {
         obj := <MyStruct<Integer> kind=10 value=0 />
         obj.run(5)
+        x: MyStruct<Integer> = obj
         return obj.value
      }
      
@@ -64,4 +65,30 @@ export function basicTests(test: TestFn) {
      }
     `
   ).expect(5);
+  test(
+    "recursive-trait-definitions",
+    `
+    function main() => Integer {
+      return 1
+    }
+    
+    struct MyStruct<T: Type> {
+      
+    }
+    
+    trait MyTrait<T: Type> {
+      fn() => MyStruct<T> 
+    }
+    
+    struct OtherStruct {
+      
+    }
+    
+    behavior OtherStruct for MyTrait<Integer> {
+      fn() => MyStruct<Integer> {
+        return <MyStruct<Integer> />
+      }
+    }
+    `
+  ).expect(1);
 }

@@ -25,9 +25,9 @@ export class TypeChecker {
 
     const mainScope = {
       body: {
-        statements: this.tree.declarations
+        statements: this.tree.declarations,
       },
-      context: mainCtx
+      context: mainCtx,
     };
 
     const resolvedFunctions = [mainScope, ...this.resolve(mainCtx)];
@@ -39,7 +39,7 @@ export class TypeChecker {
     }
 
     return {
-      typemap: this.typemap
+      typemap: this.typemap,
     };
   }
 
@@ -83,8 +83,8 @@ export class TypeChecker {
           create(types.Enum, {
             name: n.name.name,
             internalType: context.getTypeByString("Integer"),
-            members: n.entries.map(v => v.name.name),
-            typeMethods: new types.TypeMethods()
+            members: n.entries.map((v) => v.name.name),
+            typeMethods: new types.TypeMethods(),
           })
         );
       } else if (n instanceof ast.AliasDec) {
@@ -115,16 +115,8 @@ export class TypeChecker {
       if (tempTrait instanceof types.TraitFactory) {
         tempTrait.init(node, context);
       } else {
-        tempTrait.methods = node.functions.map(n =>
-          create(types.Function, {
-            name: n.name.name,
-            parameters: n.params.map(value => {
-              return context.getType(value.type!);
-            }),
-            returns: context.getType(n.returns),
-            isStatic: false,
-            trait: tempTrait
-          })
+        tempTrait.methods = node.functions.map((n) =>
+          types.makeFunctionType(n, context, tempTrait)
         );
       }
     }
@@ -185,7 +177,7 @@ export class TypeChecker {
 
         if (trait !== types.NoTrait) {
           const traitFn = trait.methods.find(
-            traitFn => traitFn.name === resolvedFn.fnType.name
+            (traitFn) => traitFn.name === resolvedFn.fnType.name
           );
           if (!traitFn) {
             throw new Error(
@@ -238,7 +230,7 @@ export class TypeChecker {
     behaviorTrait: types.Trait = types.NoTrait
   ): ResolvedFunctionInfo {
     let context = parentContext.addSubContext();
-    n.params.forEach(value => this.visit(value, context));
+    n.params.forEach((value) => this.visit(value, context));
     let isStatic = false;
     for (let tag of n.tags) {
       if (tag.name == "static") {
@@ -248,7 +240,7 @@ export class TypeChecker {
 
     let fnType = create(types.Function, {
       name: n.name.name,
-      parameters: n.params.map(value => {
+      parameters: n.params.map((value) => {
         return parentContext.getType(value.type!);
       }),
       returns: n.returns
@@ -256,7 +248,7 @@ export class TypeChecker {
         : parentContext.getTypeByString("Void"),
       isStatic,
       belongsTo: behaviorTarget,
-      trait: behaviorTrait
+      trait: behaviorTrait,
     });
 
     context.owner = fnType;
@@ -277,7 +269,7 @@ export class TypeChecker {
     return {
       context,
       fnType,
-      body: n.body
+      body: n.body,
     };
   }
 
@@ -293,7 +285,7 @@ export class TypeChecker {
         parameters: [context.getTypeByString("Integer")],
         isStatic: false,
         returns: context.getTypeByString("Void"),
-        trait: types.NoTrait
+        trait: types.NoTrait,
       })
     );
 
@@ -436,7 +428,7 @@ export class TypeChecker {
     this.typemap.set(
       n,
       create(types.RefType, {
-        ref: getFromTypemap(this.typemap, n.expr)
+        ref: getFromTypemap(this.typemap, n.expr),
       })
     );
   }
@@ -593,42 +585,46 @@ export class TypeChecker {
   }
 
   visitForVarDefStatement(n: ast.ForVarDefStatement, context: types.Context) {
-    // this.visit(n.expr, context);
-    // let ctx = context.addSubContext();
-    //
-    // // Resolve the Iterators type
-    // const t = getFromTypemap(this.typemap, n.expr);
-    // if (!(t instanceof types.Struct)) {
-    //   throw new Error("For Expression needs to be a Class!");
-    // }
-    // let found = false;
-    // let nextType: types.TypeNode;
-    // for (const c of t.implementedTraits()) {
-    //   if (c.name === "Iterator") {
-    //     // TODO: Fix for namespacing
-    //     // TODO: Reimplement
-    //
-    //     // nextType = (c("next") as OverloadedFunction).functions[0]
-    //     //   .returns!;
-    //     // ctx.addVariable(n.id, nextType);
-    //     found = true;
-    //     break;
-    //   }
-    // }
-    // if (!found) {
-    //   throw new Error("For Expression needs to be an Iterator!");
-    // }
-    //
-    // if (n.type) {
-    //   if (!isTypeEqual(context.getType(n.type), nextType!)) {
-    //     throw new Error("For Expression type does not match requested type!");
-    //   }
-    // }
-    //
-    // for (const stmt of n.scope!.statements) {
-    //   // TODO: Add visitor for scope
-    //   this.visit(stmt, ctx);
-    // }
+    this.visit(n.expr, context);
+    let ctx = context.addSubContext();
+
+    // Resolve the Iterators type
+    let trait: types.Trait = types.NoTrait;
+
+    const t = getFromTypemap(this.typemap, n.expr);
+    if (t instanceof types.Struct) {
+      for (let v of t.typeMethods.implementedTraits.values()) {
+        /// TODO: Fix for namespacing
+        if (v.name === "Iterator") {
+          trait = v;
+          break;
+        }
+      }
+    } else if (t instanceof types.Trait) {
+      if (t.name === "Iterator") {
+        trait = t;
+      }
+    }
+
+    if (trait == types.NoTrait) {
+      throw new Error("For-loop must run on an Iterator");
+    }
+
+    const returnType = trait.methods.find((fn) => fn.name === "current")!
+      .returns;
+
+    if (n.type) {
+      if (!isTypeEqual(context.getType(n.type), returnType)) {
+        throw new Error("For Expression type does not match requested type!");
+      }
+    }
+
+    ctx.addVariable(n.id, returnType);
+
+    for (const stmt of n.scope!.statements) {
+      // TODO: Add visitor for scope
+      this.visit(stmt, ctx);
+    }
   }
 
   visitBreakStatement(n: ast.BreakStatement, context: types.Context) {
@@ -734,7 +730,7 @@ export function getTypeName(t: TypeNode): string {
   }
   if (t instanceof types.Function) {
     return `function (${t.parameters
-      .map(param => getTypeName(param))
+      .map((param) => getTypeName(param))
       .join(", ")}) => ${getTypeName(t.returns)}`;
   }
   return `UnknownType[${t.constructor.name}]`;

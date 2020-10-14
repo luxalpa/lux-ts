@@ -3,6 +3,7 @@ import { create, TypeMap } from "./util";
 import { getTypeName, TypeChecker } from "./typechecker";
 import cloneDeep from "lodash.clonedeep";
 import { IdentityTracker } from "./identityTracker";
+import exp from "constants";
 
 export class TypeMethods {
   methods = new Map<Trait, Function[]>();
@@ -440,6 +441,8 @@ type TraitFactoryCachedElement = {
 
 export class TraitFactory extends Trait {
   templateParams: TemplateParam[] = [];
+  traitNode: ast.Trait;
+  parentContext: Context;
 
   cache = new Array<TraitFactoryCachedElement>();
 
@@ -448,6 +451,9 @@ export class TraitFactory extends Trait {
   }
 
   init(node: ast.Trait, context: Context) {
+    this.traitNode = node;
+    this.parentContext = context;
+
     const subContext = context.addSubContext();
     for (let templateParam of node.templateParams) {
       const p = new TemplateParam();
@@ -455,23 +461,9 @@ export class TraitFactory extends Trait {
       this.templateParams.push(p);
     }
 
-    for (const fn of node.functions) {
-      const fnType = create(Function, {
-        trait: this,
-        name: fn.name.name,
-        parameters: fn.params.map((p) => {
-          if (!p.type) {
-            // TODO: Not yet implemented
-            throw new Error("Parameters currently require a defined type");
-          }
-          return subContext.getType(p.type);
-        }),
-        returns: subContext.getType(fn.returns),
-        isStatic: false,
-      });
-
-      this.methods.push(fnType);
-    }
+    this.methods.push(
+      ...node.functions.map((fn) => makeFunctionType(fn, subContext, this))
+    );
   }
 
   resolve(args: TypeNode[]): Trait {
@@ -488,24 +480,15 @@ export class TraitFactory extends Trait {
 
     const trait = new Trait(this.name);
 
-    const replaceTypeParam = (t: TypeNode) => {
-      const i = this.templateParams.findIndex((p) => p === t);
-      if (i == -1) {
-        return t;
-      }
-      return args[i];
-    };
+    const context = this.parentContext.addSubContext();
+
+    for (let [i, param] of this.traitNode.templateParams.entries()) {
+      context.addType(param.left.name, args[i]);
+    }
 
     // build from scratch
-    trait.methods = this.methods.map((method) =>
-      create(Function, {
-        isStatic: method.isStatic,
-        name: method.name,
-        belongsTo: method.belongsTo,
-        trait,
-        returns: replaceTypeParam(method.returns),
-        parameters: method.parameters.map(replaceTypeParam),
-      })
+    trait.methods = this.traitNode.functions.map((method) =>
+      makeFunctionType(method, context, this)
     );
 
     this.cache.push({
@@ -515,4 +498,26 @@ export class TraitFactory extends Trait {
 
     return trait;
   }
+}
+
+export function makeFunctionType(
+  node: ast.FunctionDec | ast.TraitFnDec,
+  context: Context,
+  trait: Trait = NoTrait
+): Function {
+  return create(Function, {
+    trait,
+    name: node.name.name,
+    parameters: node.params.map((p) => {
+      if (!p.type) {
+        // TODO: Not yet implemented
+        throw new Error("Parameters currently require a defined type");
+      }
+      return context.getType(p.type);
+    }),
+    returns: node.returns
+      ? context.getType(node.returns)
+      : context.getTypeByString("Void"),
+    isStatic: false,
+  });
 }

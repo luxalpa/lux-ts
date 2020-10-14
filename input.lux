@@ -1,48 +1,34 @@
-struct MyStruct<T: Type> {
-    age: T
-    name: Integer
-    str: OtherStruct<Boolean>
-}
-
-struct OtherStruct<T: Type> {
-    name: Integer
-    isObj: T
-}
-
-behavior MyStruct<T> {
-    setAge(param: T) => {
-        this.age = param
-    }
-    getAge() => T {
-        return this.age
-    }
-    run() => {
-            return
-    }
-}
-
-trait MyTrait<T: Type> {
-    run() => T
-}
-
-behavior MyStruct<T> for MyTrait<Void> {
-    run() => {
-        return
-    }
-}
-
 function main() => {
-    obj := <MyStruct<Integer> age=255 />
-    obj2 := <MyStruct<Boolean> age=false />
-    obj2.run()
+/*    for x := range(1, 5) {
+        log(x)
+    }*/
+}
 
-    ptr := &obj.age
-    obj.setAge(100)
-    //obj.run()
-    *ptr = obj.getAge()
-    log(*ptr)
-    log(obj.age)
+function range(min: Integer, max: Integer) => RangeIterator {
+    return <RangeIterator value=min max=max />
+}
 
-    x: MyTrait<Void> = obj
-    x.run()
+struct RangeIterator {
+    value: Integer
+    max: Integer
+}
+
+struct IteratorResult<T: Type> {
+    done: Boolean
+    value: T
+}
+
+trait Iterator<T: Type> {
+    next() => IteratorResult<T>
+}
+
+behavior RangeIterator for Iterator<Integer> {
+    next() => IteratorResult<Integer> {
+        if(this.value = this.max) {
+            return <IteratorResult<Integer> done=true value=this.value />
+        }
+
+        this.value = this.value + 1
+        return <IteratorResult<Integer> done=false value=this.value />
+    }
 }
