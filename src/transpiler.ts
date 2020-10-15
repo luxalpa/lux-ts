@@ -72,6 +72,8 @@ export class Transpiler {
       stmts.push(generateLogFn());
     }
 
+    stmts.push(generateIterateFn());
+
     if (alloptions.generateMainStmt) {
       stmts.push(generateMainFnCall());
     }
@@ -464,121 +466,45 @@ export class Transpiler {
     };
   }
 
-  visitForExprStatement(e: ast.ForExprStatement): ESTree.ForStatement {
+  visitForExprStatement(e: ast.ForExprStatement): ESTree.ForOfStatement {
     return this.makeForStatement(e.scope!, e.expr);
   }
 
-  visitForVarDefStatement(e: ast.ForVarDefStatement): ESTree.ForStatement {
-    return this.makeForStatement(
-      e.scope!,
-      e.expr,
-      {
-        type: "AssignmentExpression",
-        operator: "=",
-        left: {
-          type: "Identifier",
-          name: e.id,
-        },
-        right: (undefined as unknown) as ESTree.Expression,
-      },
-      {
-        type: "VariableDeclarator",
-        id: {
-          type: "Identifier",
-          name: e.id,
-        },
-      }
-    );
+  visitForVarDefStatement(e: ast.ForVarDefStatement): ESTree.ForOfStatement {
+    return this.makeForStatement(e.scope!, e.expr, e.id);
   }
 
   makeForStatement(
     body: ast.Scope,
     expr: ast.Expr,
-    optAssign?: ESTree.AssignmentExpression,
-    optDeclaration?: ESTree.VariableDeclarator
-  ): ESTree.ForStatement {
-    const loopTemp = "_loopTemp"; // TODO: Make unique
-
-    let init = this.visit(expr);
-
-    const updateExprRightHand: ESTree.Expression = {
-      type: "CallExpression",
-      arguments: [],
-      optional: false,
-      callee: {
-        type: "MemberExpression",
-        optional: false,
-        object: {
-          type: "Identifier",
-          name: loopTemp,
-        },
-        property: {
-          type: "Identifier",
-          name: "next",
-        },
-        computed: false,
-      },
-    };
-
-    let updateExpr: ESTree.Expression = updateExprRightHand;
-
-    if (optAssign) {
-      updateExpr = {
-        ...optAssign,
-        right: updateExpr,
-      };
-    }
-
-    let declarations: ESTree.VariableDeclarator[] = [
-      {
-        type: "VariableDeclarator",
-        id: {
-          type: "Identifier",
-          name: loopTemp,
-        },
-        init,
-      },
-    ];
-
-    if (optDeclaration) {
-      declarations.push({
-        ...optDeclaration,
-        init: updateExprRightHand,
-      });
-    }
-
+    variable?: string
+  ): ESTree.ForOfStatement {
     return {
-      type: "ForStatement",
+      type: "ForOfStatement",
       body: this.visit(body),
-      init: {
+      await: false,
+      left: {
         type: "VariableDeclaration",
         kind: "let",
-        declarations,
-      },
-      test: {
-        type: "UnaryExpression",
-        operator: "!",
-        prefix: true,
-        argument: {
-          optional: false,
-          type: "CallExpression",
-          arguments: [],
-          callee: {
-            optional: false,
-            type: "MemberExpression",
-            object: {
+        declarations: [
+          {
+            type: "VariableDeclarator",
+            id: {
               type: "Identifier",
-              name: loopTemp,
+              name: variable || "__none",
             },
-            property: {
-              type: "Identifier",
-              name: "atEnd",
-            },
-            computed: false,
           },
-        },
+        ],
       },
-      update: updateExpr,
+      right: {
+        type: "CallExpression",
+        optional: false,
+        callee: {
+          type: "Identifier",
+          name: "__iterate",
+        },
+        arguments: [this.visit(expr)],
+      },
     };
   }
 
@@ -771,6 +697,136 @@ function generateLogFn(): ESTree.FunctionDeclaration {
                 name: "console",
               },
             },
+          },
+        },
+      ],
+    },
+  };
+}
+
+function generateIterateFn(
+  nextFnName: string = "next$Iterator"
+): ESTree.FunctionDeclaration {
+  return {
+    type: "FunctionDeclaration",
+    generator: true,
+    id: {
+      type: "Identifier",
+      name: "__iterate",
+    },
+    params: [
+      {
+        type: "Identifier",
+        name: "it",
+      },
+    ],
+    body: {
+      type: "BlockStatement",
+      body: [
+        {
+          type: "VariableDeclaration",
+          kind: "let",
+          declarations: [
+            {
+              type: "VariableDeclarator",
+              id: {
+                type: "Identifier",
+                name: "result",
+              },
+              init: {
+                type: "CallExpression",
+                optional: false,
+                arguments: [],
+                callee: {
+                  type: "MemberExpression",
+                  optional: false,
+                  property: {
+                    type: "Identifier",
+                    name: nextFnName,
+                  },
+                  computed: false,
+                  object: {
+                    type: "Identifier",
+                    name: "it",
+                  },
+                },
+              },
+            },
+          ],
+        },
+        {
+          type: "WhileStatement",
+          test: {
+            type: "UnaryExpression",
+            operator: "!",
+            prefix: true,
+            argument: {
+              type: "MemberExpression",
+              computed: false,
+              optional: false,
+              property: {
+                type: "Identifier",
+                name: "done",
+              },
+              object: {
+                type: "Identifier",
+                name: "result",
+              },
+            },
+          },
+          body: {
+            type: "BlockStatement",
+            body: [
+              {
+                type: "ExpressionStatement",
+                expression: {
+                  type: "YieldExpression",
+                  delegate: false,
+                  argument: {
+                    type: "MemberExpression",
+                    computed: false,
+                    optional: false,
+                    property: {
+                      type: "Identifier",
+                      name: "value",
+                    },
+                    object: {
+                      type: "Identifier",
+                      name: "result",
+                    },
+                  },
+                },
+              },
+              {
+                type: "ExpressionStatement",
+                expression: {
+                  type: "AssignmentExpression",
+                  operator: "=",
+                  left: {
+                    type: "Identifier",
+                    name: "result",
+                  },
+                  right: {
+                    type: "CallExpression",
+                    optional: false,
+                    arguments: [],
+                    callee: {
+                      type: "MemberExpression",
+                      optional: false,
+                      property: {
+                        type: "Identifier",
+                        name: nextFnName,
+                      },
+                      computed: false,
+                      object: {
+                        type: "Identifier",
+                        name: "it",
+                      },
+                    },
+                  },
+                },
+              },
+            ],
           },
         },
       ],

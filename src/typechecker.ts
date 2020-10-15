@@ -610,16 +610,25 @@ export class TypeChecker {
       throw new Error("For-loop must run on an Iterator");
     }
 
-    const returnType = trait.methods.find((fn) => fn.name === "current")!
-      .returns;
+    const nextReturn = trait.methods.find((fn) => fn.name === "next")!.returns;
+
+    if (!(nextReturn instanceof types.Struct)) {
+      throw new Error("next function must return a struct");
+    }
+
+    const resultReturn = nextReturn.fields.get("value");
+
+    if (!resultReturn) {
+      throw new Error("result struct must have a value field");
+    }
 
     if (n.type) {
-      if (!isTypeEqual(context.getType(n.type), returnType)) {
+      if (!isTypeEqual(context.getType(n.type), resultReturn)) {
         throw new Error("For Expression type does not match requested type!");
       }
     }
 
-    ctx.addVariable(n.id, returnType);
+    ctx.addVariable(n.id, resultReturn);
 
     for (const stmt of n.scope!.statements) {
       // TODO: Add visitor for scope

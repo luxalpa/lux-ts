@@ -91,4 +91,46 @@ export function basicTests(test: TestFn) {
     }
     `
   ).expect(1);
+  test(
+    "for-of-loops",
+    `
+    function main() => Integer {
+        v := 0
+        for x := range(1, 5) {
+            v = v + x
+        }
+        return v
+    }
+    
+    function range(min: Integer, max: Integer) => RangeIterator {
+        return <RangeIterator value=min max=max />
+    }
+    
+    struct RangeIterator {
+        value: Integer
+        max: Integer
+    }
+    
+    struct IteratorResult<T: Type> {
+        done: Boolean
+        value: T
+    }
+    
+    trait Iterator<T: Type> {
+        next() => IteratorResult<T>
+    }
+    
+    behavior RangeIterator for Iterator<Integer> {
+        next() => IteratorResult<Integer> {
+            if(this.value = this.max) {
+                return <IteratorResult<Integer> done=true value=this.value />
+            }
+    
+            previous := this.value
+            this.value = this.value + 1
+            return <IteratorResult<Integer> done=false value=previous />
+        }
+    }
+    `
+  ).expect(10);
 }

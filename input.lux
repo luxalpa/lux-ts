@@ -1,7 +1,9 @@
-function main() => {
-/*    for x := range(1, 5) {
-        log(x)
-    }*/
+function main() => Integer {
+    v := 0
+    for x := range(1, 5) {
+        v = v + x
+    }
+    return v
 }
 
 function range(min: Integer, max: Integer) => RangeIterator {
@@ -28,7 +30,8 @@ behavior RangeIterator for Iterator<Integer> {
             return <IteratorResult<Integer> done=true value=this.value />
         }
 
+        previous := this.value
         this.value = this.value + 1
-        return <IteratorResult<Integer> done=false value=this.value />
+        return <IteratorResult<Integer> done=false value=previous />
     }
 }
