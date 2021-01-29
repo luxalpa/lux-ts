@@ -56,6 +56,11 @@ export class Transpiler {
         continue;
       }
 
+      if (declaration instanceof ast.FunctionDec && !declaration.body) {
+        // TODO: Linkage to actual libraries
+        continue;
+      }
+
       let s = this.visit(declaration);
       if (Array.isArray(s)) {
         for (let x of s) {

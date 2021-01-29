@@ -10,7 +10,7 @@ export namespace ast {
     Division = "/",
     Modulo = "%",
     Equals = "=",
-    Unequals = "!="
+    Unequals = "!=",
   }
 
   export class InfixExpr extends Expr {
@@ -123,7 +123,7 @@ export namespace ast {
   export class FunctionDec extends Declaration {
     name: Identifier;
     params: VarDec[];
-    body: Scope;
+    body?: Scope;
     returns?: Type;
     tags: Tag[];
   }

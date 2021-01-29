@@ -76,7 +76,7 @@ behaviorFnDef
     ;
 
 fnDef
-    : fnType fnReturnType? scope
+    : fnType fnReturnType? scope?
     ;
 
 scope

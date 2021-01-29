@@ -7,7 +7,7 @@ import { IdentityTracker } from "./identityTracker";
 interface ResolvedFunctionInfo {
   context: types.Context;
   fnType: types.Function;
-  body: ast.Scope;
+  body?: ast.Scope;
 }
 
 export class TypeChecker {
@@ -33,6 +33,9 @@ export class TypeChecker {
     const resolvedFunctions = [mainScope, ...this.resolve(mainCtx)];
 
     for (let fn of resolvedFunctions) {
+      if (!fn.body) {
+        continue;
+      }
       for (let stmt of fn.body.statements) {
         this.visit(stmt, fn.context);
       }
@@ -277,18 +280,6 @@ export class TypeChecker {
     context.addType("Integer", new types.Integer());
     context.addType("Boolean", new types.Boolean());
     context.addType("Void", new types.Void());
-
-    context.addVariable(
-      "log",
-      create(types.Function, {
-        name: "log",
-        parameters: [context.getTypeByString("Integer")],
-        isStatic: false,
-        returns: context.getTypeByString("Void"),
-        trait: types.NoTrait,
-      })
-    );
-
     context.addVariable("false", context.getTypeByString("Boolean"));
     context.addVariable("true", context.getTypeByString("Boolean"));
   }
