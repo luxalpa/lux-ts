@@ -282,6 +282,13 @@ export class Transpiler {
     };
   }
 
+  visitString(s: ast.String): ESTree.SimpleLiteral {
+    return {
+      type: "Literal",
+      value: s.str,
+    };
+  }
+
   visitIdentifierExpr(e: ast.IdentifierExpr): ESTree.Identifier {
     const fn = getFromTypemap(this.typemap, e);
     if (fn instanceof types.Function) {

@@ -34,7 +34,7 @@ lvalue
     ;
 
 taggedDeclaration
-    : tags? declaration
+    : tags? ENDL* declaration
     ;
 
 tags
@@ -42,7 +42,7 @@ tags
     ;
 
 tag
-    : '@' ID
+    : '@' expr
     ;
 
 declaration
@@ -155,6 +155,7 @@ varDef
 expr : left=expr '.' right=ID              # memberExpr
     | value=NUMBER                         # numberE
     | id=ID                                # identifierExpr
+    | str=STRING                           # strConstExpr
     | '&' expr                             # refExpr
     | '*' expr                             # derefExpr
     | '(' expr ')'                         # bracketExpr

@@ -23,6 +23,10 @@ export namespace ast {
     value: number;
   }
 
+  export class String extends Expr {
+    str: string;
+  }
+
   export class FunctionCallExpr extends Expr {
     fn: Expr;
     params: Expr[];
@@ -129,7 +133,7 @@ export namespace ast {
   }
 
   export class Tag extends Node {
-    name: string;
+    expr: Expr;
   }
 
   export class Scope extends Node {

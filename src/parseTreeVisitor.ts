@@ -52,10 +52,15 @@ import {
   VarDefContext,
   LvaluePtrContext,
   TraitDecContext,
+  StrConstExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
 import { create } from "./util";
+
+function decodeString(str: string): string {
+  return str.slice(1, -1).replace(/\\"/g, '"');
+}
 
 export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   visitInfixExpr(ctx: InfixExprContext): ast.InfixExpr {
@@ -126,7 +131,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   visitTags(ctx: TagsContext): ast.Tag[] {
     return ctx.tag().map((t) => {
       return create(ast.Tag, {
-        name: t.ID().text,
+        expr: this.visit(t.expr()),
       });
     });
   }
@@ -188,6 +193,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       id: create(ast.Identifier, {
         name: ctx.ID().text,
       }),
+    });
+  }
+
+  visitStrConstExpr(ctx: StrConstExprContext): ast.String {
+    return create(ast.String, {
+      str: decodeString(ctx._str.text!),
     });
   }
 

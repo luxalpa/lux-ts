@@ -235,11 +235,6 @@ export class TypeChecker {
     let context = parentContext.addSubContext();
     n.params.forEach((value) => this.visit(value, context));
     let isStatic = false;
-    for (let tag of n.tags) {
-      if (tag.name == "static") {
-        isStatic = true;
-      }
-    }
 
     let fnType = create(types.Function, {
       name: n.name.name,
@@ -280,6 +275,7 @@ export class TypeChecker {
     context.addType("Integer", new types.Integer());
     context.addType("Boolean", new types.Boolean());
     context.addType("Void", new types.Void());
+    context.addType("String", new types.String());
     context.addVariable("false", context.getTypeByString("Boolean"));
     context.addVariable("true", context.getTypeByString("Boolean"));
   }
@@ -437,6 +433,10 @@ export class TypeChecker {
 
   visitNumber(n: ast.Number, context: types.Context) {
     this.typemap.set(n, context.getTypeByString("Integer"));
+  }
+
+  visitString(n: ast.String, context: types.Context) {
+    this.typemap.set(n, context.getTypeByString("String"));
   }
 
   visitAssignmentStatement(n: ast.AssignmentStatement, context: types.Context) {

@@ -1,6 +1,7 @@
-@external function log(n: Integer) => Void
+@external("log", "bindings")
+function log(str: String) => Void
 
 function main() => Integer {
-    log(10)
+    log("Hello World!")
     return 0
 }

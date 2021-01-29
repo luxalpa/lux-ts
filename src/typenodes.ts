@@ -39,6 +39,8 @@ export class Boolean extends TypeWithMethods {}
 
 export class Void extends TypeWithMethods {}
 
+export class String extends TypeWithMethods {}
+
 export class Function {
   name: string;
   parameters: TypeNode[];
