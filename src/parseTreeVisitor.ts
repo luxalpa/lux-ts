@@ -57,12 +57,15 @@ import {
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
 import { create } from "./util";
+import { CompilerContext, runAstExpr } from "./lib";
 
 function decodeString(str: string): string {
   return str.slice(1, -1).replace(/\\"/g, '"');
 }
 
 export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
+  constructor(public compilerContext: CompilerContext) {}
+
   visitInfixExpr(ctx: InfixExprContext): ast.InfixExpr {
     return create(ast.InfixExpr, {
       operator: <ast.InfixOperator>ctx._op.text,
@@ -124,6 +127,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     let dec = this.visit(ctx.declaration());
     if (ctx.tags() && dec instanceof ast.FunctionDec) {
       dec.tags = this.visit(ctx.tags()!);
+      for (let tag of dec.tags) {
+        runAstExpr(tag.expr, this.compilerContext);
+      }
     }
     return dec;
   }

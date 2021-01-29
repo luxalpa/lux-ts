@@ -3,13 +3,16 @@ import * as ESTree from "estree";
 import * as types from "./typenodes";
 import { getFromTypemap } from "./util";
 
+export interface TranspilerImport {
+  fn: string;
+  lib: string;
+}
+
 export interface TranspilerOptions {
   generateMainStmt: boolean;
-  generateLogFunction: boolean;
 }
 
 const defaultOptions: TranspilerOptions = {
-  generateLogFunction: true,
   generateMainStmt: true,
 };
 
@@ -33,8 +36,14 @@ export class Transpiler {
     return options as TranspilerOptions;
   }
 
-  transpile(
+  transpileExpr(node: ast.Expr): ESTree.Expression {
+    return this.visit(node);
+  }
+
+  // TODO: Make static
+  transpileProgram(
     program: ast.Program,
+    imports: TranspilerImport[],
     options: Partial<TranspilerOptions> = defaultOptions
   ): ESTree.Program {
     const alloptions = this.handleDefaultOptions(options);
@@ -72,10 +81,7 @@ export class Transpiler {
     }
 
     stmts.unshift(...structConstrStmts);
-
-    if (alloptions.generateLogFunction) {
-      stmts.push(generateLogFn());
-    }
+    stmts.unshift(...imports.map((value) => this.makeImport(value)));
 
     stmts.push(generateIterateFn());
 
@@ -104,6 +110,52 @@ export class Transpiler {
       throw new Error(`Transpiler: ${n.constructor.name} is unimplemented!`);
     }
     return fn.call(this, n);
+  }
+
+  makeImport(imp: TranspilerImport): ESTree.Statement {
+    return {
+      type: "VariableDeclaration",
+      declarations: [
+        {
+          type: "VariableDeclarator",
+          id: {
+            type: "ObjectPattern",
+            properties: [
+              {
+                type: "Property",
+                method: false,
+                shorthand: true,
+                computed: false,
+                key: {
+                  type: "Identifier",
+                  name: imp.fn,
+                },
+                kind: "init",
+                value: {
+                  type: "Identifier",
+                  name: imp.fn,
+                },
+              },
+            ],
+          },
+          init: {
+            type: "CallExpression",
+            callee: {
+              type: "Identifier",
+              name: "require",
+            },
+            arguments: [
+              {
+                type: "Literal",
+                value: imp.lib,
+              },
+            ],
+            optional: false,
+          },
+        },
+      ],
+      kind: "const",
+    };
   }
 
   makeStruct(struct: ast.StructDec): ESTree.FunctionDeclaration {
@@ -665,53 +717,6 @@ function generateMainFnCall(): ESTree.ExpressionStatement {
         name: "main",
       },
       arguments: [],
-    },
-  };
-}
-
-function generateLogFn(): ESTree.FunctionDeclaration {
-  return {
-    type: "FunctionDeclaration",
-    id: {
-      type: "Identifier",
-      name: "log",
-    },
-    params: [
-      {
-        type: "Identifier",
-        name: "value",
-      },
-    ],
-    body: {
-      type: "BlockStatement",
-      body: [
-        {
-          type: "ExpressionStatement",
-          expression: {
-            type: "CallExpression",
-            arguments: [
-              {
-                type: "Identifier",
-                name: "value",
-              },
-            ],
-            optional: false,
-            callee: {
-              type: "MemberExpression",
-              optional: false,
-              property: {
-                type: "Identifier",
-                name: "log",
-              },
-              computed: false,
-              object: {
-                type: "Identifier",
-                name: "console",
-              },
-            },
-          },
-        },
-      ],
     },
   };
 }

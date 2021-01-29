@@ -9,3 +9,6 @@ parser-ts/LuxLexer.ts
 parser-ts/LuxParser.ts
 parser-ts/LuxParserVisitor.ts
 gen/
+dist/
+script.js
+script.json

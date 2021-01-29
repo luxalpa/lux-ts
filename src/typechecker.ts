@@ -11,11 +11,43 @@ interface ResolvedFunctionInfo {
 }
 
 export class TypeChecker {
-  typemap: TypeMap;
-  tracker = new IdentityTracker();
-  constructor(private tree: ast.Program) {}
+  typemap: TypeMap = new Map<ast.Node, types.TypeNode>();
+  tracker = new IdentityTracker(); // TODO: This is a bit messy, either we make the TypeChecker reusable or we don't.
 
-  check(): {
+  checkExpr(
+    node: ast.Expr
+  ): {
+    typemap: TypeMap;
+  } {
+    const mainCtx = new types.Context(this.tracker);
+
+    this.addExternals(mainCtx);
+
+    mainCtx.addVariable(
+      "external",
+      create(types.Function, {
+        isStatic: false,
+        name: "external",
+        returns: mainCtx.getTypeByString("Void"),
+        parameters: [
+          mainCtx.getTypeByString("String"),
+          mainCtx.getTypeByString("String"),
+        ],
+        trait: types.NoTrait,
+      })
+    );
+
+    this.visit(node, mainCtx);
+
+    return {
+      typemap: this.typemap,
+    };
+  }
+
+  // TODO: These need to be static functions
+  checkProgram(
+    tree: ast.Program
+  ): {
     typemap: TypeMap;
   } {
     this.typemap = new Map<ast.Node, types.TypeNode>();
@@ -25,12 +57,12 @@ export class TypeChecker {
 
     const mainScope = {
       body: {
-        statements: this.tree.declarations,
+        statements: tree.declarations,
       },
       context: mainCtx,
     };
 
-    const resolvedFunctions = [mainScope, ...this.resolve(mainCtx)];
+    const resolvedFunctions = [mainScope, ...this.resolve(mainCtx, tree)];
 
     for (let fn of resolvedFunctions) {
       if (!fn.body) {
@@ -47,7 +79,7 @@ export class TypeChecker {
   }
 
   // Resolve does a first run over the code in order to register all globally accessible names.
-  resolve(context: types.Context): ResolvedFunctionInfo[] {
+  resolve(context: types.Context, tree: ast.Program): ResolvedFunctionInfo[] {
     const behaviors = new Array<ast.Behavior>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
@@ -56,7 +88,7 @@ export class TypeChecker {
     const traitObjects = new Array<types.TypeWithMethods>();
 
     // First we parse the Structs, Enums and Aliases to get the type names
-    for (const n of this.tree.declarations) {
+    for (const n of tree.declarations) {
       if (n instanceof ast.StructDec) {
         if (n.templateParams.length == 0) {
           const struct = new types.StructFactory(

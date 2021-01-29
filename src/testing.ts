@@ -43,7 +43,6 @@ export class Tester {
         try {
           const result = runCode(test.code, {
             generateMainStmt: true,
-            generateLogFunction: false,
           });
 
           test.output = result;

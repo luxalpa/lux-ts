@@ -5,12 +5,17 @@ import { LuxParser } from "../parser-ts/LuxParser";
 import { ParseTreeVisitor } from "./parseTreeVisitor";
 
 import { generate } from "astring";
-import { Transpiler, TranspilerOptions } from "./transpiler";
+import { Transpiler, TranspilerImport, TranspilerOptions } from "./transpiler";
 import * as fs from "fs";
 import { TypeChecker } from "./typechecker";
 import { CharStreams } from "antlr4ts/CharStreams";
+import { ast } from "./ast";
 
 export interface Options extends TranspilerOptions {}
+
+export interface CompilerContext {
+  external(fn: string, lib: string): void;
+}
 
 export function compileCode(input: string, options?: Partial<Options>): string {
   const inputStream = CharStreams.fromString(input);
@@ -20,14 +25,25 @@ export function compileCode(input: string, options?: Partial<Options>): string {
   parser.buildParseTrees = true;
   const tree = parser.program();
 
-  const visitor = new ParseTreeVisitor();
+  const transpilerImports = new Array<TranspilerImport>();
+
+  const ctx: CompilerContext = {
+    external(fn: string, lib: string) {
+      transpilerImports.push({
+        fn,
+        lib: `../dist/${lib}.js`,
+      });
+    },
+  };
+
+  const visitor = new ParseTreeVisitor(ctx);
   const node = tree.accept(visitor);
 
-  const typeChecker = new TypeChecker(node);
-  const { typemap } = typeChecker.check();
+  const typeChecker = new TypeChecker();
+  const { typemap } = typeChecker.checkProgram(node);
 
   const transpiler = new Transpiler(typemap);
-  const v = transpiler.transpile(node, options);
+  const v = transpiler.transpileProgram(node, transpilerImports, options);
 
   return generate(v as any);
 }
@@ -35,4 +51,18 @@ export function compileCode(input: string, options?: Partial<Options>): string {
 export function runCode(input: string, options?: Partial<Options>): any {
   const code = compileCode(input, options);
   return eval(code);
+}
+
+export function runAstExpr(node: ast.Expr, ctx: CompilerContext) {
+  const typeChecker = new TypeChecker();
+  const { typemap } = typeChecker.checkExpr(node);
+
+  const transpiler = new Transpiler(typemap);
+  const v = transpiler.transpileExpr(node);
+
+  const code = "this." + generate(v as any);
+
+  (function () {
+    eval(code);
+  }.call(ctx));
 }
