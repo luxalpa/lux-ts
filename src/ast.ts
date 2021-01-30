@@ -42,11 +42,7 @@ export namespace ast {
   }
 
   export class ObjectLiteralExpr extends Expr {
-    entries: Map<string, Expr>;
-  }
-
-  export class ObjectConstructionExpr extends Expr {
-    type: PlainType;
+    type?: PlainType;
     entries: Map<string, Expr>;
   }
 

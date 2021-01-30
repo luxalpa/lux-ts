@@ -43,7 +43,10 @@ export function basicTests(test: TestFn) {
   test(
     "traits",
     `function main() => Integer {
-        obj := <MyStruct<Integer> kind=10 value=0 />
+        obj := MyStruct<Integer> { 
+          kind: 10
+          value: 0 
+        }
         obj.run(5)
         x: MyStruct<Integer> = obj
         return obj.value
@@ -86,7 +89,7 @@ export function basicTests(test: TestFn) {
     
     methods OtherStruct for MyTrait<Integer> {
       fn() => MyStruct<Integer> {
-        return <MyStruct<Integer> />
+        return MyStruct<Integer> {}
       }
     }
     `
@@ -103,7 +106,7 @@ export function basicTests(test: TestFn) {
     }
     
     function range(min: Integer, max: Integer) => RangeIterator {
-        return <RangeIterator value=min max=max />
+        return RangeIterator { value: min, max: max }
     }
     
     struct RangeIterator {
@@ -123,12 +126,12 @@ export function basicTests(test: TestFn) {
     methods RangeIterator for Iterator<Integer> {
         next() => IteratorResult<Integer> {
             if(this.value = this.max) {
-                return <IteratorResult<Integer> done=true value=this.value />
+                return IteratorResult<Integer> { done: true, value: this.value }
             }
     
             previous := this.value
             this.value = this.value + 1
-            return <IteratorResult<Integer> done=false value=previous />
+            return IteratorResult<Integer> { done: false, value: previous }
         }
     }
     `

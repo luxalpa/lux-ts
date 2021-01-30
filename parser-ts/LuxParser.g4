@@ -163,8 +163,7 @@ expr : left=expr '.' right=ID              # memberExpr
     | left=expr op=('*' | '/') right=expr  # infixExpr
     | left=expr op=('+' | '-') right=expr  # infixExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr
-    | '[' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* ']' # objectLiteralExpr
-    | '<' plainType constructorParam* '/' '>'                      # constructorSimpleExpr
+    | plainType '{' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* '}' # objectLiteralExpr
     ;
 
 constructorParam

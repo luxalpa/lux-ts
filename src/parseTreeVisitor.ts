@@ -46,7 +46,6 @@ import {
   TypeFunctionPtrContext,
   StructDecContext,
   StructFieldDecContext,
-  ConstructorSimpleExprContext,
   MethodsDecContext,
   MethodsFnDefContext,
   VarDefContext,
@@ -108,6 +107,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     return create(ast.ObjectLiteralExpr, {
+      type: ctx.plainType() && this.visit(ctx.plainType()),
       entries,
     });
   }
@@ -422,20 +422,6 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       id: ctx.ID().text,
       type: ctx.vtype() ? (this.visit(ctx.vtype()!) as ast.Type) : undefined,
       scope: undefined,
-    });
-  }
-
-  visitConstructorSimpleExpr(
-    ctx: ConstructorSimpleExprContext
-  ): ast.ObjectConstructionExpr {
-    let entries = new Map<string, ast.Expr>();
-    for (let entry of ctx.constructorParam()) {
-      entries.set(entry.ID().text, this.visit(entry.expr()));
-    }
-
-    return create(ast.ObjectConstructionExpr, {
-      type: this.visit(ctx.plainType()),
-      entries,
     });
   }
 

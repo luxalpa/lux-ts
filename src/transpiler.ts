@@ -613,9 +613,7 @@ export class Transpiler {
     };
   }
 
-  visitObjectConstructionExpr(
-    e: ast.ObjectConstructionExpr
-  ): ESTree.NewExpression {
+  visitObjectLiteralExpr(e: ast.ObjectLiteralExpr): ESTree.NewExpression {
     let obj: types.Struct = getFromTypemap<types.Struct>(this.typemap, e);
 
     const args = [...obj.fields.entries()].map<ESTree.Expression>(
@@ -638,7 +636,7 @@ export class Transpiler {
       arguments: args,
       callee: {
         type: "Identifier",
-        name: e.type.name,
+        name: e.type!.name, // TODO: Get this to work for implicit literals
       },
     };
   }

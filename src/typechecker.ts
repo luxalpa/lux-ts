@@ -535,11 +535,8 @@ export class TypeChecker {
     }
   }
 
-  visitObjectConstructionExpr(
-    n: ast.ObjectConstructionExpr,
-    context: types.Context
-  ) {
-    const struct = context.getType(n.type);
+  visitObjectLiteralExpr(n: ast.ObjectLiteralExpr, context: types.Context) {
+    const struct = context.getType(n.type!); // TODO: Get this to work for implicit literals
     if (!(struct instanceof types.Struct)) {
       throw new Error("Constructor type needs to be a struct");
     }
