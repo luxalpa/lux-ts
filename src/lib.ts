@@ -31,7 +31,7 @@ export function compileCode(input: string, options?: Partial<Options>): string {
     external(fn: string, lib: string) {
       transpilerImports.push({
         fn,
-        lib: `../dist/${lib}.js`,
+        lib: `${lib}`,
       });
     },
   };

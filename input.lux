@@ -1,7 +1,7 @@
-@external("log", "bindings")
-function log(str: String) => Void
-
 function main() => Integer {
-    log("Hello World!")
-    return 0
+    return doStuff()
+}
+
+function doStuff(x: Integer = 0) => Integer {
+    return x
 }

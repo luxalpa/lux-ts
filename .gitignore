@@ -12,3 +12,4 @@ gen/
 dist/
 script.js
 script.json
+build/

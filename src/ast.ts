@@ -50,7 +50,7 @@ export namespace ast {
     entries: Map<string, Expr>;
   }
 
-  export class Behavior extends Node {
+  export class Methods extends Node {
     type: string;
     trait?: Type;
     templateParams: string[];

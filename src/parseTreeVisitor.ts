@@ -439,7 +439,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     });
   }
 
-  visitBehaviorDec(ctx: BehaviorDecContext): ast.Behavior {
+  visitBehaviorDec(ctx: BehaviorDecContext): ast.Methods {
     const tmpl = ctx.tmplBehavior();
 
     let templateParams: string[] = [];
@@ -453,7 +453,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
     const plainType = ctx.plainType();
 
-    return create(ast.Behavior, {
+    return create(ast.Methods, {
       type: ctx.ID().text,
       templateParams,
       trait: plainType ? this.visit(plainType) : undefined,

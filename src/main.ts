@@ -1,13 +1,6 @@
-import fs from "fs";
+import { readFileSync } from "fs";
 import yargs from "yargs";
 import { compileCode } from "./lib";
-
-// const input = fs.readFileSync("./input.lux");
-//
-// const code = compileCode(input.toString());
-// console.log(code);
-//
-// console.log(eval(code));
 
 function main() {
   const argv = yargs(process.argv.slice(2))
@@ -21,14 +14,14 @@ function main() {
     .help().argv;
 
   if (argv.build) {
-    const input = fs.readFileSync(argv.build);
+    const input = readFileSync(argv.build);
     const code = compileCode(input.toString());
     console.log(code);
     return;
   }
 
   if (argv.run) {
-    const input = fs.readFileSync(argv.run);
+    const input = readFileSync(argv.run);
     const code = compileCode(input.toString());
     console.log(code);
     console.log("=== RUNNING ===");

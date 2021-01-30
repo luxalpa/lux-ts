@@ -133,4 +133,17 @@ export function basicTests(test: TestFn) {
     }
     `
   ).expect(10);
+
+  test(
+    "Optional Parameters",
+    `
+    function main() => Integer {
+        return doStuff()
+    }
+    
+    function doStuff(x: Integer = 25) => Integer {
+        return x
+    }
+    `
+  ).expect(25);
 }

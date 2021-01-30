@@ -44,6 +44,7 @@ export class String extends TypeWithMethods {}
 export class Function {
   name: string;
   parameters: TypeNode[];
+  numRequiredParams: number;
   returns: TypeNode;
   isStatic: boolean;
   belongsTo?: TypeNode;
@@ -331,6 +332,7 @@ export class StructFactory extends TypeWithMethods {
       isStatic: fn.isStatic,
       name: fn.name,
       parameters: [...fn.parameters],
+      numRequiredParams: fn.numRequiredParams,
       returns: fn.returns,
     });
 
@@ -505,21 +507,31 @@ export class TraitFactory extends Trait {
 export function makeFunctionType(
   node: ast.FunctionDec | ast.TraitFnDec,
   context: Context,
-  trait: Trait = NoTrait
+  trait: Trait = NoTrait,
+  belongsTo?: TypeWithMethods
 ): Function {
+  let numOptionalParms = 0;
+
+  const parameters = node.params.map((p) => {
+    if (!p.type) {
+      // TODO: Not yet implemented
+      throw new Error("Parameters currently require a defined type");
+    }
+    if (p.init) {
+      numOptionalParms++;
+    }
+    return context.getType(p.type);
+  });
+
   return create(Function, {
     trait,
     name: node.name.name,
-    parameters: node.params.map((p) => {
-      if (!p.type) {
-        // TODO: Not yet implemented
-        throw new Error("Parameters currently require a defined type");
-      }
-      return context.getType(p.type);
-    }),
+    parameters,
     returns: node.returns
       ? context.getType(node.returns)
       : context.getTypeByString("Void"),
     isStatic: false,
+    numRequiredParams: parameters.length - numOptionalParms,
+    belongsTo,
   });
 }

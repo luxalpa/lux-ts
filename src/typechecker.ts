@@ -1,6 +1,6 @@
 import { ast } from "./ast";
 import * as types from "./typenodes";
-import { TypeNode } from "./typenodes";
+import { makeFunctionType, TypeNode } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import { IdentityTracker } from "./identityTracker";
 
@@ -34,6 +34,7 @@ export class TypeChecker {
           mainCtx.getTypeByString("String"),
         ],
         trait: types.NoTrait,
+        numRequiredParams: 2,
       })
     );
 
@@ -80,7 +81,7 @@ export class TypeChecker {
 
   // Resolve does a first run over the code in order to register all globally accessible names.
   resolve(context: types.Context, tree: ast.Program): ResolvedFunctionInfo[] {
-    const behaviors = new Array<ast.Behavior>();
+    const behaviors = new Array<ast.Methods>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
     const plainStructs = new Array<[types.Struct, types.StructFactory]>();
@@ -126,7 +127,7 @@ export class TypeChecker {
         throw new Error("Aliases not implemented");
       }
       // We do the Behaviors and Functions later
-      else if (n instanceof ast.Behavior) {
+      else if (n instanceof ast.Methods) {
         behaviors.push(n);
       } else if (n instanceof ast.FunctionDec) {
         functions.push(n);
@@ -268,18 +269,12 @@ export class TypeChecker {
     n.params.forEach((value) => this.visit(value, context));
     let isStatic = false;
 
-    let fnType = create(types.Function, {
-      name: n.name.name,
-      parameters: n.params.map((value) => {
-        return parentContext.getType(value.type!);
-      }),
-      returns: n.returns
-        ? parentContext.getType(n.returns)
-        : parentContext.getTypeByString("Void"),
-      isStatic,
-      belongsTo: behaviorTarget,
-      trait: behaviorTrait,
-    });
+    let fnType = makeFunctionType(
+      n,
+      parentContext,
+      behaviorTrait,
+      behaviorTarget
+    );
 
     context.owner = fnType;
 
@@ -325,7 +320,7 @@ export class TypeChecker {
       n instanceof ast.FunctionDec ||
       n instanceof ast.EnumDec ||
       n instanceof ast.StructDec ||
-      n instanceof ast.Behavior ||
+      n instanceof ast.Methods ||
       n instanceof ast.Trait
     ) {
       return;
@@ -381,7 +376,10 @@ export class TypeChecker {
       console.error(fnType);
       throw new Error("Function Call on non-function");
     }
-    if (fnType.parameters.length !== n.params.length) {
+    if (
+      n.params.length < fnType.numRequiredParams ||
+      n.params.length > fnType.parameters.length
+    ) {
       throw new Error("Function Call has incorrect number of arguments");
     }
 
@@ -389,7 +387,7 @@ export class TypeChecker {
       this.visit(value, context);
     }
 
-    for (let i = 0; i < fnType.parameters.length; i++) {
+    for (let i = 0; i < n.params.length; i++) {
       const typeParam = fnType.parameters[i];
       const nodeParam = getFromTypemap(this.typemap, n.params[i]);
       if (!isTypeEqual(typeParam, nodeParam)) {

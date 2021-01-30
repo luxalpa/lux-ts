@@ -246,10 +246,23 @@ export class Transpiler {
     const fn = getFromTypemap<types.Function>(this.typemap, e);
     const name = this.uniqueFunctionName(fn);
 
-    let params: ESTree.Pattern[] = e.params.map((param) => ({
-      type: "Identifier",
-      name: param.left.name,
-    }));
+    let params: ESTree.Pattern[] = e.params.map((param) => {
+      if (param.init) {
+        return {
+          type: "AssignmentPattern",
+          left: {
+            type: "Identifier",
+            name: param.left.name,
+          },
+          right: this.visit(param.init),
+        };
+      }
+
+      return {
+        type: "Identifier",
+        name: param.left.name,
+      };
+    });
     if (fn.belongsTo) {
       if (!(fn.belongsTo instanceof types.Struct)) {
         throw new Error(
@@ -634,7 +647,7 @@ export class Transpiler {
     return [];
   }
 
-  visitBehavior(e: ast.Behavior) {
+  visitMethods(e: ast.Methods) {
     return e.functions.map((fn) => this.visit(fn));
   }
 }
