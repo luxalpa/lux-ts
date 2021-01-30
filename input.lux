@@ -1,6 +1,14 @@
 @external("yargs", "yargs/yargs", true)
 function yargs() => Void
 
+@external("readFileSync", "fs")
+function readFileSync(name: String) => String
+
+struct Console {}
+
+@external()
+console: Console
+
 function main() => Integer {
     return 0
 }

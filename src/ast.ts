@@ -137,17 +137,20 @@ export namespace ast {
   }
 
   export class VarDec extends Declaration {
+    tags: Tag[];
     left: Identifier;
     type?: Type;
     init?: Expr;
   }
 
   export class EnumDec extends Declaration {
+    tags: Tag[];
     name: Identifier;
     entries: EnumEntry[];
   }
 
   export class StructDec extends Declaration {
+    tags: Tag[];
     name: Identifier;
     declarations: VarDec[];
     templateParams: VarDec[];
@@ -179,6 +182,7 @@ export namespace ast {
   }
 
   export class AliasDec extends Declaration {
+    tags: Tag[];
     left: Identifier;
     templateParams: VarDec[];
     alias: Type;

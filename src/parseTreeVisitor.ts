@@ -125,10 +125,10 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
   visitTaggedDeclaration(ctx: TaggedDeclarationContext): ast.Declaration {
     let dec = this.visit(ctx.declaration());
-    if (ctx.tags() && dec instanceof ast.FunctionDec) {
+    if (ctx.tags()) {
       dec.tags = this.visit(ctx.tags()!);
       for (let tag of dec.tags) {
-        runAstExpr(tag.expr, this.compilerContext);
+        runAstExpr(tag.expr, dec, this.compilerContext);
       }
     }
     return dec;
@@ -156,6 +156,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       }),
       init: initExpr && this.visit(initExpr),
       type: vtype && this.visit(vtype),
+      tags: [],
     });
   }
 
@@ -309,6 +310,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         name: ctx.ID().text,
       }),
       entries: this.visit(ctx.enumScope()) as ast.EnumEntry[],
+      tags: [],
     });
   }
 
@@ -340,6 +342,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       left: create(ast.Identifier, { name: ctx.ID().text }),
       templateParams,
       alias: this.visit(ctx.vtype()),
+      tags: [],
     });
   }
 
@@ -360,6 +363,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       name: create(ast.Identifier, { name: ctx.ID().text }),
       declarations: decs.map((dec) => this.visit(dec)),
       templateParams,
+      tags: [],
     });
   }
 

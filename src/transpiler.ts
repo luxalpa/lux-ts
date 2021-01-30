@@ -44,7 +44,7 @@ export class Transpiler {
   // TODO: Make static
   transpileProgram(
     program: ast.Program,
-    imports: TranspilerImport[],
+    imports: Map<ast.Declaration, TranspilerImport | undefined>,
     options: Partial<TranspilerOptions> = defaultOptions
   ): ESTree.Program {
     const alloptions = this.handleDefaultOptions(options);
@@ -53,6 +53,10 @@ export class Transpiler {
     let structConstrStmts: ESTree.Statement[] = [];
 
     for (const declaration of program.declarations) {
+      if (imports.has(declaration)) {
+        continue;
+      }
+
       if (declaration instanceof ast.StructDec) {
         // These are being done separately
         structConstrStmts.push(this.makeStruct(declaration));
@@ -82,7 +86,11 @@ export class Transpiler {
     }
 
     stmts.unshift(...structConstrStmts);
-    stmts.unshift(...imports.map((value) => this.makeImport(value)));
+    stmts.unshift(
+      ...[...imports.values()]
+        .filter((v) => v)
+        .map((value) => this.makeImport(value!))
+    );
 
     stmts.push(generateIterateFn());
 

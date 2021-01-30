@@ -35,7 +35,7 @@ export class TypeChecker {
           mainCtx.getTypeByString("Boolean"),
         ],
         trait: types.NoTrait,
-        numRequiredParams: 2,
+        numRequiredParams: 0,
       })
     );
 
