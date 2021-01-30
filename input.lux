@@ -1,12 +1,6 @@
-function main() => Integer {
-    x := RangeIterator {
-        value: 1
-        max: 9
-    }
-    return x.max
-}
+@external("yargs", "yargs/yargs", true)
+function yargs() => Void
 
-struct RangeIterator {
-    value: Integer
-    max: Integer
+function main() => Integer {
+    return 0
 }

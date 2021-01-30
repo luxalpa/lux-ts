@@ -32,6 +32,7 @@ export class TypeChecker {
         parameters: [
           mainCtx.getTypeByString("String"),
           mainCtx.getTypeByString("String"),
+          mainCtx.getTypeByString("Boolean"),
         ],
         trait: types.NoTrait,
         numRequiredParams: 2,

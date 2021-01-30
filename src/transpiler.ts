@@ -6,6 +6,7 @@ import { getFromTypemap } from "./util";
 export interface TranspilerImport {
   fn: string;
   lib: string;
+  simple: boolean;
 }
 
 export interface TranspilerOptions {
@@ -113,6 +114,36 @@ export class Transpiler {
   }
 
   makeImport(imp: TranspilerImport): ESTree.Statement {
+    if (imp.simple) {
+      return {
+        type: "VariableDeclaration",
+        declarations: [
+          {
+            type: "VariableDeclarator",
+            id: {
+              type: "Identifier",
+              name: imp.fn,
+            },
+            init: {
+              type: "CallExpression",
+              callee: {
+                type: "Identifier",
+                name: "require",
+              },
+              arguments: [
+                {
+                  type: "Literal",
+                  value: imp.lib,
+                },
+              ],
+              optional: false,
+            },
+          },
+        ],
+        kind: "const",
+      };
+    }
+
     return {
       type: "VariableDeclaration",
       declarations: [

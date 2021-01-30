@@ -14,7 +14,7 @@ import { ast } from "./ast";
 export interface Options extends TranspilerOptions {}
 
 export interface CompilerContext {
-  external(fn: string, lib: string): void;
+  external(fn: string, lib: string, simple: boolean): void;
 }
 
 export function compileCode(input: string, options?: Partial<Options>): string {
@@ -28,10 +28,11 @@ export function compileCode(input: string, options?: Partial<Options>): string {
   const transpilerImports = new Array<TranspilerImport>();
 
   const ctx: CompilerContext = {
-    external(fn: string, lib: string) {
+    external(fn: string, lib: string, simple: boolean = false) {
       transpilerImports.push({
         fn,
         lib: `${lib}`,
+        simple,
       });
     },
   };
