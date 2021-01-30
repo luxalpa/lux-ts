@@ -58,7 +58,7 @@ export function basicTests(test: TestFn) {
         run(param: T) => Void 
      }
      
-     behavior MyStruct<T> for Setter<Integer> {
+     methods MyStruct<T> for Setter<Integer> {
         run(param: Integer) => {
            this.value = param
         }
@@ -84,7 +84,7 @@ export function basicTests(test: TestFn) {
       
     }
     
-    behavior OtherStruct for MyTrait<Integer> {
+    methods OtherStruct for MyTrait<Integer> {
       fn() => MyStruct<Integer> {
         return <MyStruct<Integer> />
       }
@@ -120,7 +120,7 @@ export function basicTests(test: TestFn) {
         next() => IteratorResult<T>
     }
     
-    behavior RangeIterator for Iterator<Integer> {
+    methods RangeIterator for Iterator<Integer> {
         next() => IteratorResult<Integer> {
             if(this.value = this.max) {
                 return <IteratorResult<Integer> done=true value=this.value />

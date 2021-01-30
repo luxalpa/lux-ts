@@ -69,7 +69,7 @@ LTE: '<=';
 
 STRUCT: 'struct';
 TRAIT: 'trait';
-BEHAVIOR: 'behavior';
+METHODS: 'methods';
 RETURN: 'return';
 IF: 'if';
 ELSE: 'else';

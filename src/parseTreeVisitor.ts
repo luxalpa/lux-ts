@@ -47,8 +47,8 @@ import {
   StructDecContext,
   StructFieldDecContext,
   ConstructorSimpleExprContext,
-  BehaviorDecContext,
-  BehaviorFnDefContext,
+  MethodsDecContext,
+  MethodsFnDefContext,
   VarDefContext,
   LvaluePtrContext,
   TraitDecContext,
@@ -252,7 +252,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return this.visit(ctx.typeDef());
   }
 
-  visitFuncDec(ctx: FuncDecContext | BehaviorFnDefContext): ast.FunctionDec {
+  visitFuncDec(ctx: FuncDecContext | MethodsFnDefContext): ast.FunctionDec {
     let retctx: FnReturnTypeContext = ctx.fnDef().fnReturnType()!;
     let returns: ast.Type | undefined;
     if (retctx) {
@@ -439,14 +439,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     });
   }
 
-  visitBehaviorDec(ctx: BehaviorDecContext): ast.Methods {
-    const tmpl = ctx.tmplBehavior();
+  visitMethodsDec(ctx: MethodsDecContext): ast.Methods {
+    const tmpl = ctx.tmplMethods();
 
     let templateParams: string[] = [];
 
-    if (ctx.tmplBehavior()) {
+    if (ctx.tmplMethods()) {
       templateParams = ctx
-        .tmplBehavior()!
+        .tmplMethods()!
         .ID()
         .map((node) => node.text);
     }
@@ -458,8 +458,8 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       templateParams,
       trait: plainType ? this.visit(plainType) : undefined,
       functions: ctx
-        .behaviorContent()
-        .behaviorFnDef()
+        .methodsContent()
+        .methodsFnDef()
         .map((def) => this.visitFuncDec(def)),
     });
   }

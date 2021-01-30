@@ -2,6 +2,6 @@ function main() => Integer {
     return doStuff()
 }
 
-function doStuff(x: Integer = 0) => Integer {
+function doStuff(x: Integer = 10) => Integer {
     return x
 }

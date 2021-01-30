@@ -55,7 +55,7 @@ typeDef
     | 'enum' ID tmplDefParamList? enumScope        # enumDec
     | 'struct' ID tmplDefParamList? structBody     # structDec
     | 'alias' ID tmplDefParamList? ':' vtype       # aliasDec
-    | 'behavior' ID tmplBehavior? ('for' plainType)? behaviorContent  # behaviorDec
+    | 'methods' ID tmplMethods? ('for' plainType)? methodsContent  # methodsDec
     | 'trait' ID tmplDefParamList? traitBody       # traitDec
     ;
 
@@ -67,11 +67,11 @@ traitFnDec
     : ID fnType fnReturnType
     ;
 
-behaviorContent
-    : '{' ENDL* (behaviorFnDef (delim behaviorFnDef)*)? ENDL* '}'
+methodsContent
+    : '{' ENDL* (methodsFnDef (delim methodsFnDef)*)? ENDL* '}'
     ;
 
-behaviorFnDef
+methodsFnDef
     : ID tmplDefParamList? fnDef
     ;
 
@@ -117,7 +117,7 @@ fnCallParam
     | '_'
     ;
 
-tmplBehavior
+tmplMethods
     : '<' ENDL* ID (delim ID)* ENDL* '>'
     ;
 
