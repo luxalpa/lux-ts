@@ -687,6 +687,13 @@ export class Transpiler {
   visitMethods(e: ast.Methods) {
     return e.functions.map((fn) => this.visit(fn));
   }
+
+  visitArrayLiteralExpr(e: ast.ArrayLiteralExpr): ESTree.ArrayExpression {
+    return {
+      type: "ArrayExpression",
+      elements: e.entries.map((e) => this.visit(e)),
+    };
+  }
 }
 
 function defaultValueForType(t: types.TypeNode): ESTree.Expression {

@@ -4,11 +4,19 @@ function yargs() => Void
 @external("readFileSync", "fs")
 function readFileSync(name: String) => String
 
-struct Console {}
+@external() struct Console {}
 
-@external()
-console: Console
+@external() methods Console {
+    log(str: Any) => Void
+}
+trait Any {}
+methods Integer for Any {}
+methods String for Any {}
+
+@external() console: Console
 
 function main() => Integer {
+    console.log("String")
+    dragons: Array<Array<String>> = [["300", "1"]]
     return 0
 }

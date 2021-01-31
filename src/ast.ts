@@ -41,6 +41,10 @@ export namespace ast {
     property: string;
   }
 
+  export class ArrayLiteralExpr extends Expr {
+    entries: Array<Expr>;
+  }
+
   export class ObjectLiteralExpr extends Expr {
     type?: PlainType;
     entries: Map<string, Expr>;

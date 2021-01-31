@@ -149,4 +149,14 @@ export function basicTests(test: TestFn) {
     }
     `
   ).expect(25);
+
+  test(
+    "Arrays",
+    `
+    function main() => Integer {
+      dragons: Array<Array<String>> = [["300", "1"]]
+      return 10
+    }
+    `
+  ).expect(10);
 }

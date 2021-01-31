@@ -3,7 +3,6 @@ import { create, TypeMap } from "./util";
 import { getTypeName, TypeChecker } from "./typechecker";
 import cloneDeep from "lodash.clonedeep";
 import { IdentityTracker } from "./identityTracker";
-import exp from "constants";
 
 export class TypeMethods {
   methods = new Map<Trait, Function[]>();
@@ -20,6 +19,8 @@ export class TypeMethods {
 }
 
 export class TypeNode {}
+
+export const NoType = new TypeNode();
 
 export class TypeWithMethods {
   // We can define methods on any type, so we need this as a common object.
@@ -313,6 +314,10 @@ export class StructFactory extends TypeWithMethods {
     return this.structDecNode.name.name;
   }
 
+  getStructParams(struct: Struct): TypeNode[] {
+    return this.resolvedStructs.find((value) => value.struct == struct)!.params;
+  }
+
   addMethod(trait: Trait, fn: Function) {
     this.typeMethods.addMethod(trait, fn);
     for (let { params, struct } of this.resolvedStructs) {
@@ -431,7 +436,11 @@ export class StructFactory extends TypeWithMethods {
     }
 
     for (let dec of n.declarations) {
-      this.typeChecker.visitVarDec(dec, templateSubContext, struct);
+      this.typeChecker.visitVarDec({
+        node: dec,
+        context: templateSubContext,
+        struct,
+      });
     }
 
     return struct;

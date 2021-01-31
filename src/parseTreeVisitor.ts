@@ -52,6 +52,7 @@ import {
   LvaluePtrContext,
   TraitDecContext,
   StrConstExprContext,
+  ArrayLiteralExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
@@ -97,6 +98,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   visitNumberE(ctx: NumberEContext): ast.Number {
     return create(ast.Number, {
       value: +ctx._value.text!,
+    });
+  }
+
+  visitArrayLiteralExpr(ctx: ArrayLiteralExprContext): ast.ArrayLiteralExpr {
+    return create(ast.ArrayLiteralExpr, {
+      entries: ctx.expr().map((value) => this.visit(value)),
     });
   }
 

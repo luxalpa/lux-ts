@@ -1,6 +1,6 @@
 import { ast } from "./ast";
 import * as types from "./typenodes";
-import { makeFunctionType, TypeNode } from "./typenodes";
+import { makeFunctionType, TypeNode, Void } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import { IdentityTracker } from "./identityTracker";
 
@@ -8,6 +8,13 @@ interface ResolvedFunctionInfo {
   context: types.Context;
   fnType: types.Function;
   body?: ast.Scope;
+}
+
+interface TypeCheckerContext<T extends ast.Node> {
+  node: T;
+  context: types.Context;
+  struct?: types.Struct;
+  expectedType?: types.TypeNode;
 }
 
 export class TypeChecker {
@@ -39,7 +46,7 @@ export class TypeChecker {
       })
     );
 
-    this.visit(node, mainCtx);
+    this.visit({ node: node, context: mainCtx });
 
     return {
       typemap: this.typemap,
@@ -71,7 +78,7 @@ export class TypeChecker {
         continue;
       }
       for (let stmt of fn.body.statements) {
-        this.visit(stmt, fn.context);
+        this.visit({ node: stmt, context: fn.context });
       }
     }
 
@@ -267,7 +274,7 @@ export class TypeChecker {
     behaviorTrait: types.Trait = types.NoTrait
   ): ResolvedFunctionInfo {
     let context = parentContext.addSubContext();
-    n.params.forEach((value) => this.visit(value, context));
+    n.params.forEach((value) => this.visit({ node: value, context }));
     let isStatic = false;
 
     let fnType = makeFunctionType(
@@ -306,91 +313,126 @@ export class TypeChecker {
     context.addType("String", new types.String());
     context.addVariable("false", context.getTypeByString("Boolean"));
     context.addVariable("true", context.getTypeByString("Boolean"));
+
+    context.addType(
+      "Array",
+      new types.StructFactory(
+        this,
+        create(ast.StructDec, {
+          tags: [],
+          declarations: [],
+          name: create(ast.Identifier, {
+            name: "Array",
+          }),
+          templateParams: [
+            create(ast.VarDec, {
+              tags: [],
+              left: create(ast.Identifier, {
+                name: "T",
+              }),
+              type: create(ast.PlainType, {
+                name: "Type",
+                templateParams: [],
+              }),
+            }),
+          ],
+        }),
+        context,
+        this.typemap
+      )
+    );
   }
 
-  visit(n: ast.Node, context: types.Context) {
-    if (!n) {
+  visit(ctx: TypeCheckerContext<ast.Node>) {
+    if (!ctx.node) {
       throw new Error("visit: Node to visit is undefined");
     }
-    if (n.constructor.name == "Object") {
-      throw new Error(`Object without type: (${JSON.stringify(n)})`);
+    if (ctx.node.constructor.name == "Object") {
+      throw new Error(`Object without type: (${JSON.stringify(ctx.node)})`);
     }
 
     if (
-      n instanceof ast.AliasDec ||
-      n instanceof ast.FunctionDec ||
-      n instanceof ast.EnumDec ||
-      n instanceof ast.StructDec ||
-      n instanceof ast.Methods ||
-      n instanceof ast.Trait
+      ctx.node instanceof ast.AliasDec ||
+      ctx.node instanceof ast.FunctionDec ||
+      ctx.node instanceof ast.EnumDec ||
+      ctx.node instanceof ast.StructDec ||
+      ctx.node instanceof ast.Methods ||
+      ctx.node instanceof ast.Trait
     ) {
       return;
     }
 
-    let fn = this[("visit" + n.constructor.name) as keyof TypeChecker] as (
-      n: ast.Node,
-      context: types.Context
-    ) => any;
+    let fn = this[
+      ("visit" + ctx.node.constructor.name) as keyof TypeChecker
+    ] as (ctx: TypeCheckerContext<ast.Node>) => any;
     if (!fn) {
-      throw new Error(`TypeChecker: ${n.constructor.name} is unimplemented!`);
+      throw new Error(
+        `TypeChecker: ${ctx.node.constructor.name} is unimplemented!`
+      );
     }
-    return fn.call(this, n, context);
+    return fn.call(this, ctx);
   }
 
-  visitVarDec(n: ast.VarDec, context: types.Context, struct?: types.Struct) {
-    let type: types.TypeNode;
+  visitVarDec({ node, context, struct }: TypeCheckerContext<ast.VarDec>) {
+    let type: types.TypeNode | undefined;
 
-    if (n.init) {
-      this.visit(n.init, context);
+    if (node.type) {
+      type = context.getType(node.type);
     }
 
-    if (n.type) {
-      type = context.getType(n.type);
-      if (n.init) {
-        let t = getFromTypemap(this.typemap, n.init)!;
-        if (!isTypeEqual(type, t)) {
+    if (node.init) {
+      this.visit({ node: node.init, context, expectedType: type });
+    }
+
+    if (node.type) {
+      if (node.init) {
+        let t = getFromTypemap(this.typemap, node.init)!;
+        if (!isTypeEqual(type!, t)) {
           console.log(type, t);
           throw new Error("type mismatch!");
         }
       }
     } else {
-      type = getFromTypemap(this.typemap, n.init!)!;
+      type = getFromTypemap(this.typemap, node.init!)!;
     }
     if (struct) {
-      if (struct.fields.has(n.left.name)) {
+      if (struct.fields.has(node.left.name)) {
         throw new Error("Field in struct is already defined");
       }
-      struct.fields.set(n.left.name, type);
+      struct.fields.set(node.left.name, type!);
     } else {
-      context.addVariable(n.left.name, type);
+      context.addVariable(node.left.name, type!);
     }
   }
 
-  visitFunctionCallStmt(n: ast.FunctionCallStmt, context: types.Context) {
-    this.visit(n.fnCall, context);
+  visitFunctionCallStmt({
+    node,
+    context,
+  }: TypeCheckerContext<ast.FunctionCallStmt>) {
+    this.visit({ node: node.fnCall, context });
   }
 
-  visitFunctionCallExpr(n: ast.FunctionCallExpr, context: types.Context) {
-    this.visit(n.fn, context);
-    const fnType = this.typemap.get(n.fn)!;
+  visitFunctionCallExpr({
+    node,
+    context,
+  }: TypeCheckerContext<ast.FunctionCallExpr>) {
+    this.visit({ node: node.fn, context });
+    const fnType = this.typemap.get(node.fn)!;
     if (!(fnType instanceof types.Function)) {
       console.error(fnType);
       throw new Error("Function Call on non-function");
     }
     if (
-      n.params.length < fnType.numRequiredParams ||
-      n.params.length > fnType.parameters.length
+      node.params.length < fnType.numRequiredParams ||
+      node.params.length > fnType.parameters.length
     ) {
       throw new Error("Function Call has incorrect number of arguments");
     }
 
-    for (const value of n.params) {
-      this.visit(value, context);
-    }
-
-    for (let i = 0; i < n.params.length; i++) {
+    for (let i = 0; i < node.params.length; i++) {
       const typeParam = fnType.parameters[i];
-      const nodeParam = getFromTypemap(this.typemap, n.params[i]);
+      this.visit({ node: node.params[i], context, expectedType: typeParam });
+      const nodeParam = getFromTypemap(this.typemap, node.params[i]);
       if (!isTypeEqual(typeParam, nodeParam)) {
         throw new Error(
           `Type mismatch in call to function ${
@@ -400,31 +442,31 @@ export class TypeChecker {
       }
     }
 
-    this.typemap.set(n, fnType.returns!);
+    this.typemap.set(node, fnType.returns!);
   }
 
-  visitMemberExpr(n: ast.MemberExpr, context: types.Context) {
-    this.visit(n.object, context);
+  visitMemberExpr({ node, context }: TypeCheckerContext<ast.MemberExpr>) {
+    this.visit({ node: node.object, context });
     let t: types.TypeNode = getFromTypemap(
       this.typemap,
-      n.object
+      node.object
     ) as types.Struct;
 
     if (!(t instanceof types.MetaType)) {
-      const v = types.getMember(t, n.property);
+      const v = types.getMember(t, node.property);
       if (!v) {
         throw new Error(
-          `Property '${n.property}' does not exist on '${getTypeName(t)}'`
+          `Property '${node.property}' does not exist on '${getTypeName(t)}'`
         );
       }
-      this.typemap.set(n, v);
+      this.typemap.set(node, v);
     } else {
       if (t.type instanceof types.Enum) {
         const e = t.type;
-        if (!e.members.includes(n.property)) {
-          throw `Property ${n.property} not found on Enum ${e.name}`;
+        if (!e.members.includes(node.property)) {
+          throw `Property ${node.property} not found on Enum ${e.name}`;
         }
-        this.typemap.set(n, e);
+        this.typemap.set(node, e);
         return;
       }
 
@@ -434,48 +476,54 @@ export class TypeChecker {
     }
   }
 
-  visitIdentifierExpr(n: ast.IdentifierExpr, context: types.Context) {
-    const [v, id] = context.getVariable(n.id.name);
-    this.typemap.set(n, v);
-    this.tracker.track(n, id);
+  visitIdentifierExpr({
+    node,
+    context,
+  }: TypeCheckerContext<ast.IdentifierExpr>) {
+    const [v, id] = context.getVariable(node.id.name);
+    this.typemap.set(node, v);
+    this.tracker.track(node, id);
   }
 
-  visitRefExpr(n: ast.RefExpr, context: types.Context) {
-    this.visit(n.expr, context);
+  visitRefExpr({ node, context }: TypeCheckerContext<ast.RefExpr>) {
+    this.visit({ node: node.expr, context });
 
     this.typemap.set(
-      n,
+      node,
       create(types.RefType, {
-        ref: getFromTypemap(this.typemap, n.expr),
+        ref: getFromTypemap(this.typemap, node.expr),
       })
     );
   }
 
-  visitDerefExpr(n: ast.RefExpr, context: types.Context) {
-    this.visit(n.expr, context);
-    const t = getFromTypemap(this.typemap, n.expr);
+  visitDerefExpr({ node, context }: TypeCheckerContext<ast.DerefExpr>) {
+    this.visit({ node: node.expr, context });
+    const t = getFromTypemap(this.typemap, node.expr);
 
     if (!(t instanceof types.RefType)) {
       throw new Error("Can only dereference pointers");
     }
 
-    this.typemap.set(n, t.ref);
+    this.typemap.set(node, t.ref);
   }
 
-  visitNumber(n: ast.Number, context: types.Context) {
-    this.typemap.set(n, context.getTypeByString("Integer"));
+  visitNumber({ node, context }: TypeCheckerContext<ast.Number>) {
+    this.typemap.set(node, context.getTypeByString("Integer"));
   }
 
-  visitString(n: ast.String, context: types.Context) {
-    this.typemap.set(n, context.getTypeByString("String"));
+  visitString({ node, context }: TypeCheckerContext<ast.String>) {
+    this.typemap.set(node, context.getTypeByString("String"));
   }
 
-  visitAssignmentStatement(n: ast.AssignmentStatement, context: types.Context) {
-    this.visit(n.right, context);
-    this.visit(n.left, context);
+  visitAssignmentStatement({
+    node,
+    context,
+  }: TypeCheckerContext<ast.AssignmentStatement>) {
+    this.visit({ node: node.left, context });
+    const leftType = getFromTypemap(this.typemap, node.left);
 
-    const leftType = getFromTypemap(this.typemap, n.left);
-    const rightType = getFromTypemap(this.typemap, n.right);
+    this.visit({ node: node.right, context, expectedType: leftType });
+    const rightType = getFromTypemap(this.typemap, node.right);
 
     if (!isTypeEqual(leftType, rightType)) {
       throw new Error(
@@ -486,45 +534,48 @@ export class TypeChecker {
     }
   }
 
-  visitInfixExpr(n: ast.InfixExpr, context: types.Context) {
-    this.visit(n.left, context);
-    this.visit(n.right, context);
+  visitInfixExpr({ node, context }: TypeCheckerContext<ast.InfixExpr>) {
+    this.visit({ node: node.left, context });
+    this.visit({ node: node.right, context });
 
-    const leftType = getFromTypemap(this.typemap, n.left);
-    const rightType = getFromTypemap(this.typemap, n.right);
+    const leftType = getFromTypemap(this.typemap, node.left);
+    const rightType = getFromTypemap(this.typemap, node.right);
 
     if (!isTypeEqual(leftType, rightType)) {
       throw new Error(
-        `Operator '${n.operator}' can not be applied to types ${getTypeName(
+        `Operator '${node.operator}' can not be applied to types ${getTypeName(
           leftType
         )} and ${getTypeName(rightType)}`
       );
     }
 
-    switch (n.operator) {
+    switch (node.operator) {
       case ast.InfixOperator.Equals:
       case ast.InfixOperator.Unequals:
-        this.typemap.set(n, context.getTypeByString("Boolean"));
+        this.typemap.set(node, context.getTypeByString("Boolean"));
         break;
       default:
-        this.typemap.set(n, getFromTypemap(this.typemap, n.left)!);
+        this.typemap.set(node, getFromTypemap(this.typemap, node.left)!);
         break;
     }
   }
 
-  visitReturnStatement(n: ast.ReturnStatement, context: types.Context) {
+  visitReturnStatement({
+    node,
+    context,
+  }: TypeCheckerContext<ast.ReturnStatement>) {
     const fn = context.getOwner();
 
     if (fn === null) {
       throw new Error("Return statement must be inside function!");
     }
 
-    if (n.expr) {
-      this.visit(n.expr, context);
+    if (node.expr) {
+      this.visit({ node: node.expr, context });
     }
 
-    const exprType = n.expr
-      ? getFromTypemap(this.typemap, n.expr)
+    const exprType = node.expr
+      ? getFromTypemap(this.typemap, node.expr)
       : context.getTypeByString("Void");
 
     if (!isTypeEqual(fn.returns, exprType)) {
@@ -536,14 +587,50 @@ export class TypeChecker {
     }
   }
 
-  visitObjectLiteralExpr(n: ast.ObjectLiteralExpr, context: types.Context) {
-    const struct = context.getType(n.type!); // TODO: Get this to work for implicit literals
+  visitArrayLiteralExpr({
+    node,
+    context,
+    expectedType,
+  }: TypeCheckerContext<ast.ArrayLiteralExpr>) {
+    if (expectedType) {
+      let elementType: types.TypeNode;
+      // If this is a native array
+      if (
+        expectedType instanceof types.Struct &&
+        expectedType.factory === context.getStructFactory("Array")
+      ) {
+        elementType = expectedType.factory.getStructParams(expectedType)[0];
+      } else {
+        throw new Error(
+          "List initializers are currently only supported on native Arrays"
+        );
+      }
+
+      for (const e of node.entries) {
+        this.visit({ node: e, context, expectedType: elementType });
+        if (!isTypeEqual(elementType, getFromTypemap(this.typemap, e))) {
+          throw new Error("Type mismatch!");
+        }
+      }
+
+      this.typemap.set(node, expectedType);
+    } else {
+      // TODO: Add implicit typing
+      throw new Error("Using Array literals as lvalues is not yet supported");
+    }
+  }
+
+  visitObjectLiteralExpr({
+    node,
+    context,
+  }: TypeCheckerContext<ast.ObjectLiteralExpr>) {
+    const struct = context.getType(node.type!); // TODO: Get this to work for implicit literals
     if (!(struct instanceof types.Struct)) {
       throw new Error("Constructor type needs to be a struct");
     }
 
-    for (let [key, value] of n.entries) {
-      this.visit(value, context);
+    for (let [key, value] of node.entries) {
+      this.visit({ node: value, context });
       let t = getFromTypemap(this.typemap, value)!;
       const keyType = struct.fields.get(key);
       if (!keyType) {
@@ -554,33 +641,36 @@ export class TypeChecker {
       }
     }
 
-    this.typemap.set(n, struct);
+    this.typemap.set(node, struct);
   }
 
-  visitIfStatement(n: ast.IfStatement, context: types.Context) {
-    this.visit(n.condition, context);
+  visitIfStatement({ node, context }: TypeCheckerContext<ast.IfStatement>) {
+    this.visit({ node: node.condition, context });
     if (
-      getFromTypemap(this.typemap, n.condition) !==
+      getFromTypemap(this.typemap, node.condition) !==
       (context.getTypeByString("Boolean") as types.TypeNode)
     ) {
       throw new Error("If condition must be boolean!");
     }
     let ctx = context.addSubContext();
-    for (const stmt of n.scope.statements) {
-      this.visit(stmt, ctx);
+    for (const stmt of node.scope.statements) {
+      this.visit({ node: stmt, context: ctx });
     }
   }
 
-  visitForStatement(n: ast.ForStatement, context: types.Context) {
+  visitForStatement({ node, context }: TypeCheckerContext<ast.ForStatement>) {
     let ctx = context.addSubContext();
-    for (const stmt of n.scope!.statements) {
-      this.visit(stmt, ctx);
+    for (const stmt of node.scope!.statements) {
+      this.visit({ node: stmt, context: ctx });
     }
   }
 
-  visitForExprStatement(n: ast.ForExprStatement, context: types.Context) {
-    // this.visit(n.expr, context);
-    // const t = getFromTypemap(this.typemap, n.expr);
+  visitForExprStatement({
+    node,
+    context,
+  }: TypeCheckerContext<ast.ForExprStatement>) {
+    // this.visit({node: node.expr, context});
+    // const t = getFromTypemap(this.typemap, node.expr);
     // if (!(t instanceof types.Struct)) {
     //   throw new Error("For Expression needs an iterator!");
     // }
@@ -597,20 +687,23 @@ export class TypeChecker {
     // }
     //
     // let ctx = context.addSubContext();
-    // for (const stmt of n.scope!.statements) {
+    // for (const stmt of node.scope!.statements) {
     //   // TODO: Add visitor for scope
-    //   this.visit(stmt, ctx);
+    //   this.visit({node: stmt, context: ctx});
     // }
   }
 
-  visitForVarDefStatement(n: ast.ForVarDefStatement, context: types.Context) {
-    this.visit(n.expr, context);
+  visitForVarDefStatement({
+    node,
+    context,
+  }: TypeCheckerContext<ast.ForVarDefStatement>) {
+    this.visit({ node: node.expr, context });
     let ctx = context.addSubContext();
 
     // Resolve the Iterators type
     let trait: types.Trait = types.NoTrait;
 
-    const t = getFromTypemap(this.typemap, n.expr);
+    const t = getFromTypemap(this.typemap, node.expr);
     if (t instanceof types.Struct) {
       for (let v of t.typeMethods.implementedTraits.values()) {
         /// TODO: Fix for namespacing
@@ -641,17 +734,17 @@ export class TypeChecker {
       throw new Error("result struct must have a value field");
     }
 
-    if (n.type) {
-      if (!isTypeEqual(context.getType(n.type), resultReturn)) {
+    if (node.type) {
+      if (!isTypeEqual(context.getType(node.type), resultReturn)) {
         throw new Error("For Expression type does not match requested type!");
       }
     }
 
-    ctx.addVariable(n.id, resultReturn);
+    ctx.addVariable(node.id, resultReturn);
 
-    for (const stmt of n.scope!.statements) {
+    for (const stmt of node.scope!.statements) {
       // TODO: Add visitor for scope
-      this.visit(stmt, ctx);
+      this.visit({ node: stmt, context: ctx });
     }
   }
 
