@@ -43,6 +43,7 @@ export class TypeChecker {
         ],
         trait: types.NoTrait,
         numRequiredParams: 0,
+        hasRestParam: false,
       })
     );
 
@@ -274,7 +275,10 @@ export class TypeChecker {
     behaviorTrait: types.Trait = types.NoTrait
   ): ResolvedFunctionInfo {
     let context = parentContext.addSubContext();
-    n.params.forEach((value) => this.visit({ node: value, context }));
+    for (const node of n.params) {
+      // TODO: This should probably be inlined here
+      this.visit({ node, context });
+    }
     let isStatic = false;
 
     let fnType = makeFunctionType(
@@ -373,7 +377,11 @@ export class TypeChecker {
     return fn.call(this, ctx);
   }
 
-  visitVarDec({ node, context, struct }: TypeCheckerContext<ast.VarDec>) {
+  visitVarDec({
+    node,
+    context,
+    struct,
+  }: TypeCheckerContext<ast.VarDec | ast.FnParamDec>) {
     let type: types.TypeNode | undefined;
 
     if (node.type) {
@@ -405,6 +413,10 @@ export class TypeChecker {
     }
   }
 
+  visitFnParamDec(ctx: TypeCheckerContext<ast.FnParamDec>) {
+    return this.visitVarDec(ctx);
+  }
+
   visitFunctionCallStmt({
     node,
     context,
@@ -424,13 +436,30 @@ export class TypeChecker {
     }
     if (
       node.params.length < fnType.numRequiredParams ||
-      node.params.length > fnType.parameters.length
+      (node.params.length > fnType.parameters.length && !fnType.hasRestParam)
     ) {
       throw new Error("Function Call has incorrect number of arguments");
     }
 
+    const restParamIdx = fnType.parameters.length - 1;
+
     for (let i = 0; i < node.params.length; i++) {
-      const typeParam = fnType.parameters[i];
+      let typeParam: types.TypeNode;
+
+      if (fnType.hasRestParam && i >= restParamIdx) {
+        const arr = fnType.parameters[restParamIdx];
+        if (
+          arr instanceof types.Struct &&
+          arr.factory == context.getStructFactory("Array")
+        ) {
+          typeParam = arr.factory.getStructParams(arr)[0];
+        } else {
+          throw new Error("Currently we support only Arrays as varargs");
+        }
+      } else {
+        typeParam = fnType.parameters[i];
+      }
+
       this.visit({ node: node.params[i], context, expectedType: typeParam });
       const nodeParam = getFromTypemap(this.typemap, node.params[i]);
       if (!isTypeEqual(typeParam, nodeParam)) {

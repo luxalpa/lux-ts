@@ -70,7 +70,7 @@ export namespace ast {
 
   export class TraitFnDec extends Node {
     name: Identifier;
-    params: VarDec[];
+    params: FnParamDec[];
     returns: Type;
   }
 
@@ -131,7 +131,7 @@ export namespace ast {
 
   export class FunctionDec extends Declaration {
     name: Identifier;
-    params: VarDec[];
+    params: FnParamDec[];
     body?: Scope;
     returns?: Type;
     tags: Tag[];
@@ -150,6 +150,14 @@ export namespace ast {
     left: Identifier;
     type?: Type;
     init?: Expr;
+  }
+
+  export class FnParamDec extends Declaration {
+    tags: Tag[];
+    left: Identifier;
+    type?: Type;
+    init?: Expr;
+    ellipsis: boolean;
   }
 
   export class EnumDec extends Declaration {

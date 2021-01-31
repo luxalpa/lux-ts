@@ -161,4 +161,17 @@ export function basicTests(test: TestFn) {
     }
     `
   ).expect(30);
+
+  test(
+    "Variadic Functions",
+    `
+    function main() => Integer {
+      return stuff(1, 2, 3)
+    }
+    
+    function stuff(...params: Array<Integer>) => Integer {
+      return params[1]
+    }
+    `
+  ).expect(2);
 }

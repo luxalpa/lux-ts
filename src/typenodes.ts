@@ -50,6 +50,7 @@ export class Function {
   isStatic: boolean;
   belongsTo?: TypeNode;
   trait: Trait;
+  hasRestParam: boolean;
 }
 
 export class FunctionPointer extends TypeNode {
@@ -339,6 +340,7 @@ export class StructFactory extends TypeWithMethods {
       parameters: [...fn.parameters],
       numRequiredParams: fn.numRequiredParams,
       returns: fn.returns,
+      hasRestParam: fn.hasRestParam,
     });
 
     if (fn.returns instanceof TemplateParam) {
@@ -532,6 +534,11 @@ export function makeFunctionType(
     return context.getType(p.type);
   });
 
+  const hasRestParam =
+    node.params.length == 0
+      ? false
+      : node.params[node.params.length - 1].ellipsis;
+
   return create(Function, {
     trait,
     name: node.name.name,
@@ -542,5 +549,6 @@ export function makeFunctionType(
     isStatic: false,
     numRequiredParams: parameters.length - numOptionalParms,
     belongsTo,
+    hasRestParam,
   });
 }

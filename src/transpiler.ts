@@ -297,6 +297,16 @@ export class Transpiler {
         };
       }
 
+      if (param.ellipsis) {
+        return {
+          type: "RestElement",
+          argument: {
+            type: "Identifier",
+            name: param.left.name,
+          },
+        };
+      }
+
       return {
         type: "Identifier",
         name: param.left.name,

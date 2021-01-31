@@ -16,9 +16,10 @@ methods String for Any {}
 @external() console: Console
 
 function main() => Integer {
-    console.log("String")
-    dragons: Array<String> = ["Hello", "World!"]
-    console.log(dragons[0])
-    dragons[0] = "Phoenix"
+    something(1, 2, 3)
     return 0
+}
+
+function something(...list: Array<Integer>) => Void {
+    console.log(list[0])
 }

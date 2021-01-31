@@ -295,7 +295,24 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .fnDef()
         .fnType()
         .fnDefParam()
-        .map((param) => this.visit(param) as ast.VarDec),
+        .map((param) => {
+          if (param instanceof FnDefParamFullContext) {
+            const initExpr = param.varDef().expr();
+            const vtype = param.varDef().vtype();
+
+            return create(ast.FnParamDec, {
+              left: create(ast.Identifier, {
+                name: param.varDef().ID().text,
+              }),
+              init: initExpr && this.visit(initExpr),
+              type: vtype && this.visit(vtype),
+              tags: [],
+              ellipsis: !!param.OPELIPSE(),
+            });
+          } else {
+            throw new Error("skip parameters are not yet defined");
+          }
+        }),
       body,
       returns,
       tags: [],
@@ -304,10 +321,6 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
   visitFnReturnTypeSingle(ctx: FnReturnTypeSingleContext): ast.Type {
     return this.visit(ctx.vtype());
-  }
-
-  visitFnDefParamFull(ctx: FnDefParamFullContext): ast.VarDec {
-    return this.visit(ctx.varDef()) as ast.VarDec;
   }
 
   visitScope(ctx: ScopeContext): ast.Scope {
@@ -497,7 +510,24 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
             params: dec
               .fnType()
               .fnDefParam()
-              .map((p) => this.visit(p) as ast.VarDec),
+              .map((param) => {
+                if (param instanceof FnDefParamFullContext) {
+                  const initExpr = param.varDef().expr();
+                  const vtype = param.varDef().vtype();
+
+                  return create(ast.FnParamDec, {
+                    left: create(ast.Identifier, {
+                      name: param.varDef().ID().text,
+                    }),
+                    init: initExpr && this.visit(initExpr),
+                    type: vtype && this.visit(vtype),
+                    tags: [],
+                    ellipsis: !!param.OPELIPSE(),
+                  });
+                } else {
+                  throw new Error("skip parameters are not yet defined");
+                }
+              }),
             returns: this.visit(dec.fnReturnType()),
           })
         ),
