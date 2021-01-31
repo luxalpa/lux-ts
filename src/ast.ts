@@ -41,6 +41,11 @@ export namespace ast {
     property: string;
   }
 
+  export class ArrayAccessExpr extends Expr {
+    array: Expr;
+    property: Expr;
+  }
+
   export class ArrayLiteralExpr extends Expr {
     entries: Array<Expr>;
   }

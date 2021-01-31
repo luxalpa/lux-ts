@@ -27,10 +27,11 @@ fnCallStatement
     : expr '(' fnCallParams? ')'          # fnCallStatementImplicit
     ;
 
-lvalue
+lvalue // TODO: all lvalues should be expressions
     : ID                                  # lvalueID
     | left=lvalue '.' right=ID            # lvalueMember
     | '*' lvalue                          # lvaluePtr
+    | array=expr '[' property=expr ']'    # lvalueArrayAccess
     ;
 
 taggedDeclaration
@@ -165,6 +166,7 @@ expr : left=expr '.' right=ID              # memberExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr
     | plainType '{' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* '}' # objectLiteralExpr
     | '[' ENDL* (expr (delim expr)*)? ENDL* ']' #arrayLiteralExpr
+    | array=expr '[' property=expr ']'                    # arrayAccessExpr
     ;
 
 constructorParam

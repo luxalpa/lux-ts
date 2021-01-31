@@ -587,6 +587,33 @@ export class TypeChecker {
     }
   }
 
+  visitArrayAccessExpr({
+    node,
+    context,
+  }: TypeCheckerContext<ast.ArrayAccessExpr>) {
+    this.visit({ node: node.array, context });
+    const t = getFromTypemap(this.typemap, node.array);
+    if (
+      t instanceof types.Struct &&
+      t.factory === context.getStructFactory("Array")
+    ) {
+      const elementType = t.factory.getStructParams(t)[0];
+      this.visit({ node: node.property, context, expectedType: elementType });
+      const propertyType = getFromTypemap(this.typemap, node.property);
+      if (!isTypeEqual(context.getTypeByString("Integer"), propertyType)) {
+        throw new Error(
+          `Array access type mismatch: Expected Integer, got ${getTypeName(
+            propertyType
+          )}`
+        );
+      }
+      this.typemap.set(node, elementType);
+    } else {
+      // TODO: Implement for iterables, maps
+      throw new Error("Array access currently only implemented for arrays");
+    }
+  }
+
   visitArrayLiteralExpr({
     node,
     context,
@@ -839,6 +866,9 @@ export function getTypeName(t: TypeNode): string {
   }
   if (t instanceof types.Void) {
     return "Void";
+  }
+  if (t instanceof types.String) {
+    return "String";
   }
   if (t instanceof types.RefType) {
     return "&" + getTypeName(t.ref);

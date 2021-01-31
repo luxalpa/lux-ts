@@ -154,9 +154,11 @@ export function basicTests(test: TestFn) {
     "Arrays",
     `
     function main() => Integer {
-      dragons: Array<Array<String>> = [["300", "1"]]
-      return 10
+      dragons: Array<Integer> = [10, 20]
+      dragons[0] = 15
+      dragons[1] = 30
+      return dragons[1]
     }
     `
-  ).expect(10);
+  ).expect(30);
 }

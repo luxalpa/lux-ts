@@ -17,6 +17,8 @@ methods String for Any {}
 
 function main() => Integer {
     console.log("String")
-    dragons: Array<Array<String>> = [["300", "1"]]
+    dragons: Array<String> = ["Hello", "World!"]
+    console.log(dragons[0])
+    dragons[0] = "Phoenix"
     return 0
 }

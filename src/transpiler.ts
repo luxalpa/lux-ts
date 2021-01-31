@@ -694,6 +694,16 @@ export class Transpiler {
       elements: e.entries.map((e) => this.visit(e)),
     };
   }
+
+  visitArrayAccessExpr(e: ast.ArrayAccessExpr): ESTree.MemberExpression {
+    return {
+      type: "MemberExpression",
+      optional: false,
+      computed: true,
+      object: this.visit(e.array),
+      property: this.visit(e.property),
+    };
+  }
 }
 
 function defaultValueForType(t: types.TypeNode): ESTree.Expression {
