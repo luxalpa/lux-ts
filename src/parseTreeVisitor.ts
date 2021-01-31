@@ -55,11 +55,13 @@ import {
   ArrayLiteralExprContext,
   ArrayAccessExprContext,
   LvalueArrayAccessContext,
+  MacroStatementContext,
+  MacroExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
 import { create } from "./util";
-import { CompilerContext, runAstExpr } from "./lib";
+import { CompilerContext, runAstExpr, runMacro } from "./lib";
 
 function decodeString(str: string): string {
   return str.slice(1, -1).replace(/\\"/g, '"');
@@ -129,10 +131,28 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   }
 
   visitProgram(ctx: ProgramContext): ast.Program {
+    if (!ctx.children) {
+      throw new Error("Expect some children!");
+    }
+
+    const declarations = new Array<ast.Declaration>();
+
+    for (const child of ctx.children) {
+      if (child instanceof MacroStatementContext) {
+        const decs = runMacro(this.visit(child), this.compilerContext);
+        declarations.push(...decs);
+      } else if (child instanceof TaggedDeclarationContext) {
+        declarations.push(this.visit(child));
+      }
+    }
     let decs = ctx.taggedDeclaration();
     return create(ast.Program, {
-      declarations: decs.map((dec) => this.visit(dec)),
+      declarations,
     });
+  }
+
+  visitMacroExpr(ctx: MacroExprContext): ast.Expr {
+    return this.visit(ctx.expr());
   }
 
   visitDecStmt(ctx: DecStmtContext): ast.Declaration {

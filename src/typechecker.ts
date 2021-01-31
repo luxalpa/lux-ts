@@ -47,6 +47,19 @@ export class TypeChecker {
       })
     );
 
+    mainCtx.addVariable(
+      "include",
+      create(types.Function, {
+        isStatic: false,
+        name: "include",
+        returns: mainCtx.getTypeByString("Void"),
+        parameters: [mainCtx.getTypeByString("String")],
+        trait: types.NoTrait,
+        numRequiredParams: 1,
+        hasRestParam: false,
+      })
+    );
+
     this.visit({ node: node, context: mainCtx });
 
     return {

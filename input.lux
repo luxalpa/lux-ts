@@ -1,25 +1,6 @@
-@external("yargs", "yargs/yargs", true)
-function yargs() => Void
-
-@external("readFileSync", "fs")
-function readFileSync(name: String) => String
-
-@external() struct Console {}
-
-@external() methods Console {
-    log(str: Any) => Void
-}
-trait Any {}
-methods Integer for Any {}
-methods String for Any {}
-
-@external() console: Console
+$include("input2.lux")
 
 function main() => Integer {
-    something(1, 2, 3)
+    console.log("Hello", 1)
     return 0
-}
-
-function something(...list: Array<Integer>) => Void {
-    console.log(list[0])
 }

@@ -25,7 +25,8 @@ function main() {
     const code = compileCode(input.toString());
     console.log(code);
     console.log("=== RUNNING ===");
-    console.log(eval(code));
+    const v = eval(code);
+    console.log("> Returned:", v);
     return;
   }
 

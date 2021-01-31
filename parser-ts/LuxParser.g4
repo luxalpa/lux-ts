@@ -3,7 +3,7 @@ parser grammar LuxParser;
 options { tokenVocab=LuxLexer; }
 
 program
-    :   (taggedDeclaration | ENDL)+ EOF
+    :   (taggedDeclaration | ENDL | macroStatement)+ EOF
     ;
 
 statement
@@ -14,6 +14,10 @@ statement
     | 'if' expr scope                     # ifStmt
     | 'break'                             # breakStmt
     | forStatement scope                  # forStmt
+    ;
+
+macroStatement
+    : '$' expr                            # macroExpr
     ;
 
 forStatement

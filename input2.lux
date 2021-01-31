@@ -1,0 +1,15 @@
+@external("yargs", "yargs/yargs", true)
+function yargs() => Void
+
+@external("readFileSync", "fs")
+function readFileSync(name: String) => String
+
+@external() struct Console {}
+
+@external() methods Console {
+    log(...str: Array<Any>) => Void
+}
+trait Any {}
+methods Integer for Any {}
+methods String for Any {}
+@external() console: Console
