@@ -8,8 +8,9 @@
     "grammar": "yarn lexer && yarn parser",
     "nodemon": "nodemon",
     "nodemon-tests": "nodemon --config ./nodemon-tests.json",
+    "nodemon-langserv": "nodemon --config ./nodemon-langserver.json",
     "tests": "ts-node ./src/testing.ts",
-    "bindings": "webpack -c webpack.config.js",
+    "webpack": "webpack -c webpack.config.js",
     "acorn": "acorn script.js > script.json"
   },
   "dependencies": {
@@ -25,6 +26,8 @@
     "nodemon": "^2.0.4",
     "ts-node": "^9.0.0",
     "typescript": "3.9.x",
+    "vscode-languageserver": "^7.0.0",
+    "vscode-languageserver-textdocument": "^1.0.1",
     "yargs": "^16.0.3"
   },
   "devDependencies": {

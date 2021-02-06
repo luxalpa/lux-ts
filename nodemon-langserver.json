@@ -1,0 +1,5 @@
+{
+  "ext": "js,ts",
+  "exec": "tsc -b && tsc -b ./vscode-extension && code --extensionDevelopmentPath=%CD%/vscode-extension -w ./input.lux",
+  "ignore": ["src/testing.ts", "src/tests/*"]
+}

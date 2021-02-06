@@ -1,5 +1,7 @@
 @external("yargs", "yargs/yargs", true)
-function yargs() => Void
+function yargs(args: Array<String>) => Void
+
+@external() struct YargsArgv {}
 
 @external("readFileSync", "fs")
 function readFileSync(name: String) => String

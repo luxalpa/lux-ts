@@ -13,3 +13,4 @@ dist/
 script.js
 script.json
 build/
+vscode-extension/out/
