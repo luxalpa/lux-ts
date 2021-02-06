@@ -331,7 +331,7 @@ export class Transpiler {
             computed: false,
             object: {
               type: "Identifier",
-              name: fn.belongsTo.name,
+              name: jsStructName(fn.belongsTo),
             },
             property: {
               type: "Identifier",
@@ -926,4 +926,12 @@ function generateIterateFn(
       ],
     },
   };
+}
+
+function jsStructName(node: types.Struct): string {
+  if (node.template && node.template.params.length) {
+    return node.template.factory.getName();
+  } else {
+    return node.name;
+  }
 }

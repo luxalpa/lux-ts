@@ -1,6 +1,6 @@
 import { ast } from "./ast";
 import * as types from "./typenodes";
-import { makeFunctionType, TypeNode, Void } from "./typenodes";
+import { FunctionPointer, makeFunctionType, TypeNode, Void } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
 import { IdentityTracker } from "./identityTracker";
 
@@ -308,8 +308,8 @@ export class TypeChecker {
         context.addVariable("this", behaviorTarget);
       }
 
-      if (behaviorTarget instanceof types.Struct && behaviorTarget.factory) {
-        behaviorTarget.factory.addMethod(behaviorTrait, fnType);
+      if (behaviorTarget instanceof types.Struct && behaviorTarget.template) {
+        behaviorTarget.template.factory.addMethod(behaviorTrait, fnType);
       } else {
         behaviorTarget.typeMethods.addMethod(behaviorTrait, fnType);
       }
@@ -409,8 +409,9 @@ export class TypeChecker {
       if (node.init) {
         let t = getFromTypemap(this.typemap, node.init)!;
         if (!isTypeEqual(type!, t)) {
-          console.log(type, t);
-          throw new Error("type mismatch!");
+          throw new Error(
+            `Expected ${getTypeName(type!)}, got ${getTypeName(t!)}`
+          );
         }
       }
     } else {
@@ -463,9 +464,9 @@ export class TypeChecker {
         const arr = fnType.parameters[restParamIdx];
         if (
           arr instanceof types.Struct &&
-          arr.factory == context.getStructFactory("Array")
+          arr.template?.factory == context.getStructFactory("Array")
         ) {
-          typeParam = arr.factory.getStructParams(arr)[0];
+          typeParam = arr.template.factory.getStructParams(arr)[0];
         } else {
           throw new Error("Currently we support only Arrays as varargs");
         }
@@ -530,12 +531,17 @@ export class TypeChecker {
   visitRefExpr({ node, context }: TypeCheckerContext<ast.RefExpr>) {
     this.visit({ node: node.expr, context });
 
-    this.typemap.set(
-      node,
-      create(types.RefType, {
-        ref: getFromTypemap(this.typemap, node.expr),
-      })
-    );
+    const t = getFromTypemap(this.typemap, node.expr);
+    if (t instanceof types.Function) {
+      this.typemap.set(node, new FunctionPointer(t.parameters, t.returns));
+    } else {
+      this.typemap.set(
+        node,
+        create(types.RefType, {
+          ref: t,
+        })
+      );
+    }
   }
 
   visitDerefExpr({ node, context }: TypeCheckerContext<ast.DerefExpr>) {
@@ -637,9 +643,9 @@ export class TypeChecker {
     const t = getFromTypemap(this.typemap, node.array);
     if (
       t instanceof types.Struct &&
-      t.factory === context.getStructFactory("Array")
+      t.template?.factory === context.getStructFactory("Array")
     ) {
-      const elementType = t.factory.getStructParams(t)[0];
+      const elementType = t.template.factory.getStructParams(t)[0];
       this.visit({ node: node.property, context, expectedType: elementType });
       const propertyType = getFromTypemap(this.typemap, node.property);
       if (!isTypeEqual(context.getTypeByString("Integer"), propertyType)) {
@@ -666,9 +672,11 @@ export class TypeChecker {
       // If this is a native array
       if (
         expectedType instanceof types.Struct &&
-        expectedType.factory === context.getStructFactory("Array")
+        expectedType.template?.factory === context.getStructFactory("Array")
       ) {
-        elementType = expectedType.factory.getStructParams(expectedType)[0];
+        elementType = expectedType.template.factory.getStructParams(
+          expectedType
+        )[0];
       } else {
         throw new Error(
           "List initializers are currently only supported on native Arrays"
@@ -677,8 +685,13 @@ export class TypeChecker {
 
       for (const e of node.entries) {
         this.visit({ node: e, context, expectedType: elementType });
-        if (!isTypeEqual(elementType, getFromTypemap(this.typemap, e))) {
-          throw new Error("Type mismatch!");
+
+        const exp = getFromTypemap(this.typemap, e);
+
+        if (!isTypeEqual(elementType, exp)) {
+          throw new Error(
+            `Expected: ${getTypeName(elementType)}, got: ${getTypeName(exp)}`
+          );
         }
       }
 
@@ -699,12 +712,14 @@ export class TypeChecker {
     }
 
     for (let [key, value] of node.entries) {
-      this.visit({ node: value, context });
-      let t = getFromTypemap(this.typemap, value)!;
       const keyType = struct.fields.get(key);
       if (!keyType) {
         throw new Error(`Key ${key} does not exist on ${struct.name}`);
       }
+
+      this.visit({ node: value, context, expectedType: keyType });
+      let t = getFromTypemap(this.typemap, value)!;
+
       if (!isTypeEqual(keyType, t)) {
         throw new Error(`Type mismatch in ${struct.name} for ${key}`);
       }
@@ -852,17 +867,9 @@ export function isTypeEqual(
 
   // Function pointers
   if (strong instanceof types.FunctionPointer) {
-    if (!(weak instanceof types.RefType)) {
-      return false;
+    if (weak instanceof types.FunctionPointer) {
+      return isFunctionEqual(strong, weak);
     }
-
-    if (!(weak.ref instanceof types.Function)) {
-      return false;
-    }
-
-    const fn = weak.ref;
-
-    return isFunctionEqual(strong, fn);
   }
 
   if (strong instanceof types.Function) {
@@ -878,7 +885,7 @@ export function isTypeEqual(
 
 function isFunctionEqual(
   a: types.Function | types.FunctionPointer,
-  b: types.Function
+  b: types.Function | types.FunctionPointer
 ) {
   if (!isTypeEqual(a.returns!, b.returns!)) {
     return false;
@@ -923,6 +930,11 @@ export function getTypeName(t: TypeNode): string {
   }
   if (t instanceof types.Function) {
     return `function (${t.parameters
+      .map((param) => getTypeName(param))
+      .join(", ")}) => ${getTypeName(t.returns)}`;
+  }
+  if (t instanceof types.FunctionPointer) {
+    return `&function (${t.parameters
       .map((param) => getTypeName(param))
       .join(", ")}) => ${getTypeName(t.returns)}`;
   }

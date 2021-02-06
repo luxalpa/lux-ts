@@ -53,8 +53,9 @@ export class Function {
   hasRestParam: boolean;
 }
 
+// TODO: Optional Params and rest params on function pointers
 export class FunctionPointer extends TypeNode {
-  constructor(public parameters: TypeNode[], public returns: TypeNode | null) {
+  constructor(public parameters: TypeNode[], public returns: TypeNode) {
     super();
   }
 }
@@ -68,7 +69,10 @@ export const NoTrait = new Trait("");
 
 export class Struct extends TypeWithMethods {
   fields = new Map<string, TypeNode>();
-  factory?: StructFactory;
+  template?: {
+    factory: StructFactory;
+    params: TypeNode[];
+  };
   constructor(public name: string) {
     super();
   }
@@ -337,28 +341,13 @@ export class StructFactory extends TypeWithMethods {
       trait: fn.trait,
       isStatic: fn.isStatic,
       name: fn.name,
-      parameters: [...fn.parameters],
+      parameters: fn.parameters.map((param) =>
+        resolveTemplateParams(param, this.templateParams, params)
+      ),
       numRequiredParams: fn.numRequiredParams,
-      returns: fn.returns,
+      returns: resolveTemplateParams(fn.returns, this.templateParams, params),
       hasRestParam: fn.hasRestParam,
     });
-
-    if (fn.returns instanceof TemplateParam) {
-      const p = this.templateParams.findIndex((value) => value == fn.returns);
-      if (p != -1) {
-        newFn.returns = params[p];
-      }
-    }
-
-    for (let i = 0; i < fn.parameters.length; i++) {
-      const param = fn.parameters[i];
-      if (param instanceof TemplateParam) {
-        const p = this.templateParams.findIndex((value) => value == param);
-        if (p != -1) {
-          newFn.parameters[i] = params[p];
-        }
-      }
-    }
 
     struct.typeMethods.addMethod(trait, newFn);
   }
@@ -401,10 +390,17 @@ export class StructFactory extends TypeWithMethods {
 
     const n = cloneDeep(this.structDecNode);
 
-    let struct: Struct = new Struct(n.name.name);
+    let struct: Struct = new Struct(
+      templateParams.length
+        ? `${n.name.name}<${templateParams.map(getTypeName).join(",")}>`
+        : n.name.name
+    );
     if (templateParams.length > 0) {
       // only templated structs should be back-referenced to their generic for now.
-      struct.factory = this;
+      struct.template = {
+        factory: this,
+        params: templateParams,
+      };
     }
 
     this.typemap.set(n, struct);
@@ -447,6 +443,37 @@ export class StructFactory extends TypeWithMethods {
 
     return struct;
   }
+}
+
+function resolveTemplateParams(
+  obj: TypeNode,
+  params: TemplateParam[],
+  args: TypeNode[]
+): TypeNode {
+  if (obj instanceof TemplateParam) {
+    const idx = params.findIndex((v) => v == obj);
+    return args[idx];
+  }
+
+  if (obj instanceof Struct && obj.template) {
+    const p = obj.template.params.map((p) =>
+      resolveTemplateParams(p, params, args)
+    );
+    return obj.template.factory.resolve(p);
+  }
+
+  if (obj instanceof RefType) {
+    return new RefType(resolveTemplateParams(obj.ref, params, args));
+  }
+
+  if (obj instanceof FunctionPointer) {
+    return new FunctionPointer(
+      obj.parameters.map((value) => resolveTemplateParams(value, params, args)),
+      resolveTemplateParams(obj.returns, params, args)
+    );
+  }
+
+  return obj;
 }
 
 type TraitFactoryCachedElement = {

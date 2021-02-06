@@ -157,20 +157,21 @@ varDef
     | ID ':' vtype '=' expr
     ;
 
-expr : left=expr '.' right=ID              # memberExpr
+expr
+    : '(' expr ')'                         # bracketExpr
+    | left=expr '.' right=ID               # memberExpr
     | value=NUMBER                         # numberE
     | id=ID                                # identifierExpr
     | str=STRING                           # strConstExpr
+    | array=expr '[' property=expr ']'     # arrayAccessExpr
     | '&' expr                             # refExpr
     | '*' expr                             # derefExpr
-    | '(' expr ')'                         # bracketExpr
     | expr '(' fnCallParams? ')'           # implFnCallExpr
     | left=expr op=('*' | '/') right=expr  # infixExpr
     | left=expr op=('+' | '-') right=expr  # infixExpr
     | left=expr op=('=' | '!=') right=expr # infixExpr
     | plainType '{' ENDL* (objectLiteralEntry (delim objectLiteralEntry)* )? ENDL* '}' # objectLiteralExpr
-    | '[' ENDL* (expr (delim expr)*)? ENDL* ']' #arrayLiteralExpr
-    | array=expr '[' property=expr ']'                    # arrayAccessExpr
+    | '[' ENDL* (expr (delim expr)*)? ENDL* ']' # arrayLiteralExpr
     ;
 
 constructorParam

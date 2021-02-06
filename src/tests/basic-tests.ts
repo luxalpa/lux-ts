@@ -138,7 +138,7 @@ export function basicTests(test: TestFn) {
   ).expect(10);
 
   test(
-    "Optional Parameters",
+    "optional-parameters",
     `
     function main() => Integer {
         return doStuff()
@@ -151,7 +151,7 @@ export function basicTests(test: TestFn) {
   ).expect(25);
 
   test(
-    "Arrays",
+    "arrays",
     `
     function main() => Integer {
       dragons: Array<Integer> = [10, 20]
@@ -163,7 +163,7 @@ export function basicTests(test: TestFn) {
   ).expect(30);
 
   test(
-    "Variadic Functions",
+    "variadic-functions",
     `
     function main() => Integer {
       return stuff(1, 2, 3)
@@ -174,4 +174,42 @@ export function basicTests(test: TestFn) {
     }
     `
   ).expect(2);
+
+  test(
+    "methods-on-template-structs",
+    `
+    struct MyStruct<T: Type> {
+        value: Array<T>
+    }
+    methods MyStruct<T> {
+        hello() => Array<T> {
+            return this.value
+        }
+        first() => &T {
+            return &this.value[0]
+        }
+        set(arr: Array<T>) => Boolean {
+            this.value = arr
+            return true
+        }
+        greeter() => &() => Array<T> {
+            return &this.hello
+        }
+    }
+    
+    function main() => Integer {
+        str := MyStruct<Integer> {
+            value: [100, 200]
+        }
+    
+        x: Array<Integer> = str.hello()
+        y: &Integer = str.first()
+    
+        str.set([1, 2, 3])
+        fn: &() => Array<Integer> = str.greeter()
+    
+        return x[0]
+    }
+    `
+  ).expect(100);
 }
