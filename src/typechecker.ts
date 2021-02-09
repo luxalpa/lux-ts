@@ -1,4 +1,4 @@
-import { ast } from "./ast";
+import { ast, NoRange } from "./ast";
 import * as types from "./typenodes";
 import { FunctionPointer, makeFunctionType, TypeNode, Void } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
@@ -336,20 +336,25 @@ export class TypeChecker {
       new types.StructFactory(
         this,
         create(ast.StructDec, {
+          range: NoRange,
           tags: [],
           declarations: [],
           name: create(ast.Identifier, {
             name: "Array",
+            range: NoRange,
           }),
           templateParams: [
             create(ast.VarDec, {
               tags: [],
+              range: NoRange,
               left: create(ast.Identifier, {
                 name: "T",
+                range: NoRange,
               }),
               type: create(ast.PlainType, {
                 name: "Type",
                 templateParams: [],
+                range: NoRange,
               }),
             }),
           ],

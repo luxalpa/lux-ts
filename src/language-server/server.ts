@@ -102,7 +102,7 @@ export function lspCreateAndListen() {
       documentSettings.clear();
     } else {
       globalSettings = <ExampleSettings>(
-        (change.settings.languageServerExample || defaultSettings)
+        (change.settings.luxLanguageServer || defaultSettings)
       );
     }
 
@@ -118,7 +118,7 @@ export function lspCreateAndListen() {
     if (!result) {
       result = connection.workspace.getConfiguration({
         scopeUri: resource,
-        section: "languageServerExample",
+        section: "luxLanguageServer",
       });
       documentSettings.set(resource, result);
     }
@@ -190,7 +190,7 @@ export function lspCreateAndListen() {
 
   connection.onDidChangeWatchedFiles((_change) => {
     // Monitored files have change in VSCode
-    connection.console.log("We received an file change event");
+    connection.console.log("We received a file change event");
   });
 
   // This handler provides the initial list of the completion items.
@@ -201,7 +201,7 @@ export function lspCreateAndListen() {
       // info and always provide the same completion items.
       return [
         {
-          label: "TypeScriptxaaads",
+          label: "TypeScript",
           kind: CompletionItemKind.Text,
           data: 1,
         },

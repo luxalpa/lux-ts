@@ -22,7 +22,9 @@ export class TypeNode {}
 
 export const NoType = new TypeNode();
 
-export class TypeWithMethods {
+export class ErrorType extends TypeNode {}
+
+export class TypeWithMethods extends TypeNode {
   // We can define methods on any type, so we need this as a common object.
   // We could inline this using inheritance, but that would make type creation awkward (because of the function) and we'd need custom constructors on every TypeNode.
   typeMethods: TypeMethods = new TypeMethods();

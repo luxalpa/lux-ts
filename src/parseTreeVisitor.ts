@@ -59,15 +59,48 @@ import {
   MacroExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
-import { ast } from "./ast";
+import { ast, Range } from "./ast";
 import { create } from "./util";
 import { CompilerContext, runAstExpr, runMacro } from "./lib";
+import { ParserRuleContext } from "antlr4ts/ParserRuleContext";
+import { Token } from "antlr4ts/Token";
 
 function decodeString(str: string): string {
   return str.slice(1, -1).replace(/\\"/g, '"');
 }
 
-export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
+function getRange(ctx: ParserRuleContext): Range {
+  return {
+    start: {
+      col: ctx.start.charPositionInLine,
+      line: ctx.start.line,
+    },
+    end: {
+      col: ctx.stop!.charPositionInLine + ctx.stop!.text!.length,
+      line: ctx.stop!.line,
+    },
+  };
+}
+
+function getRangeFromTerminal(terminal: TerminalNode): Range {
+  return getRangeFromToken(terminal.symbol);
+}
+
+function getRangeFromToken(token: Token): Range {
+  return {
+    start: {
+      col: token.charPositionInLine,
+      line: token.line,
+    },
+    end: {
+      col: token.charPositionInLine + token.text!.length,
+      line: token.line,
+    },
+  };
+}
+
+export class ParseTreeVisitor
+  implements LuxParserVisitor<ast.Node | ast.Node[]> {
   constructor(public compilerContext: CompilerContext) {}
 
   visitInfixExpr(ctx: InfixExprContext): ast.InfixExpr {
@@ -75,6 +108,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       operator: <ast.InfixOperator>ctx._op.text,
       left: this.visit(ctx._left),
       right: this.visit(ctx._right),
+      range: getRange(ctx),
     });
   }
 
@@ -88,6 +122,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       params: ctx.fnCallParams()
         ? (this.visit(ctx.fnCallParams()!) as ast.Expr[])
         : [],
+      range: getRange(ctx),
     });
   }
 
@@ -102,6 +137,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   visitNumberE(ctx: NumberEContext): ast.Number {
     return create(ast.Number, {
       value: +ctx._value.text!,
+      range: getRange(ctx),
     });
   }
 
@@ -109,12 +145,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.ArrayAccessExpr, {
       array: this.visit(ctx._array),
       property: this.visit(ctx._property),
+      range: getRange(ctx),
     });
   }
 
   visitArrayLiteralExpr(ctx: ArrayLiteralExprContext): ast.ArrayLiteralExpr {
     return create(ast.ArrayLiteralExpr, {
       entries: ctx.expr().map((value) => this.visit(value)),
+      range: getRange(ctx),
     });
   }
 
@@ -127,6 +165,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.ObjectLiteralExpr, {
       type: ctx.plainType() && this.visit(ctx.plainType()),
       entries,
+      range: getRange(ctx),
     });
   }
 
@@ -148,6 +187,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     let decs = ctx.taggedDeclaration();
     return create(ast.Program, {
       declarations,
+      range: getRange(ctx),
     });
   }
 
@@ -174,6 +214,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return ctx.tag().map((t) => {
       return create(ast.Tag, {
         expr: this.visit(t.expr()),
+        range: getRange(ctx),
       });
     });
   }
@@ -189,10 +230,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.VarDec, {
       left: create(ast.Identifier, {
         name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
       }),
       init: initExpr && this.visit(initExpr),
       type: vtype && this.visit(vtype),
       tags: [],
+      range: getRange(ctx),
     });
   }
 
@@ -204,12 +247,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.PlainType, {
       name: ctx.ID().text,
       templateParams: ctx.tmplParam().map((p) => this.visit(p)),
+      range: getRange(ctx),
     });
   }
 
   visitTypeRef(ctx: TypeRefContext): ast.RefType {
     return create(ast.RefType, {
       type: this.visit(ctx.plainType()),
+      range: getRange(ctx),
     });
   }
 
@@ -220,6 +265,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .fnDefParam()
         .map((param) => this.visit(param) as ast.VarDec),
       returns: this.visit(ctx.fnReturnType()),
+      range: getRange(ctx),
     });
   }
 
@@ -235,25 +281,30 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.IdentifierExpr, {
       id: create(ast.Identifier, {
         name: ctx.ID().text,
+        range: getRange(ctx),
       }),
+      range: getRange(ctx),
     });
   }
 
   visitStrConstExpr(ctx: StrConstExprContext): ast.String {
     return create(ast.String, {
       str: decodeString(ctx._str.text!),
+      range: getRange(ctx),
     });
   }
 
   visitRefExpr(ctx: RefExprContext): ast.RefExpr {
     return create(ast.RefExpr, {
       expr: this.visit(ctx.expr()),
+      range: getRange(ctx),
     });
   }
 
   visitDerefExpr(ctx: DerefExprContext): ast.DerefExpr {
     return create(ast.DerefExpr, {
       expr: this.visit(ctx.expr()),
+      range: getRange(ctx),
     });
   }
 
@@ -261,6 +312,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.AssignmentStatement, {
       left: this.visit(ctx.lvalue()),
       right: this.visit(ctx.expr()),
+      range: getRange(ctx),
     });
   }
 
@@ -268,13 +320,16 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.IdentifierExpr, {
       id: create(ast.Identifier, {
         name: ctx.ID().text,
+        range: getRange(ctx),
       }),
+      range: getRange(ctx),
     });
   }
 
   visitLvaluePtr(ctx: LvaluePtrContext): ast.DerefExpr {
     return create(ast.DerefExpr, {
       expr: this.visit(ctx.lvalue()),
+      range: getRange(ctx),
     });
   }
 
@@ -282,6 +337,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.MemberExpr, {
       object: this.visit(ctx._left),
       property: ctx._right.text!,
+      range: getRange(ctx),
     });
   }
 
@@ -289,6 +345,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.ArrayAccessExpr, {
       array: this.visit(ctx._array),
       property: this.visit(ctx._property),
+      range: getRange(ctx),
     });
   }
 
@@ -310,6 +367,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.FunctionDec, {
       name: create(ast.Identifier, {
         name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
       }),
       params: ctx
         .fnDef()
@@ -323,11 +381,13 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
             return create(ast.FnParamDec, {
               left: create(ast.Identifier, {
                 name: param.varDef().ID().text,
+                range: getRangeFromTerminal(param.varDef().ID()),
               }),
               init: initExpr && this.visit(initExpr),
               type: vtype && this.visit(vtype),
               tags: [],
               ellipsis: !!param.OPELIPSE(),
+              range: getRange(param),
             });
           } else {
             throw new Error("skip parameters are not yet defined");
@@ -336,6 +396,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       body,
       returns,
       tags: [],
+      range: getRange(ctx),
     });
   }
 
@@ -347,26 +408,32 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     let statements = ctx.statement();
     return create(ast.Scope, {
       statements: statements.map((statement) => this.visit(statement)),
+      range: getRange(ctx),
     });
   }
 
   visitReturnStmt(ctx: ReturnStmtContext): ast.ReturnStatement {
     return create(ast.ReturnStatement, {
       expr: ctx.expr() ? this.visit(ctx.expr()!) : undefined,
+      range: getRange(ctx),
     });
   }
 
-  visitBreakStmt(_ctx: BreakStmtContext): ast.BreakStatement {
-    return create(ast.BreakStatement, {});
+  visitBreakStmt(ctx: BreakStmtContext): ast.BreakStatement {
+    return create(ast.BreakStatement, {
+      range: getRange(ctx),
+    });
   }
 
   visitEnumDec(ctx: EnumDecContext): ast.EnumDec {
     return create(ast.EnumDec, {
       name: create(ast.Identifier, {
         name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
       }),
       entries: this.visit(ctx.enumScope()) as ast.EnumEntry[],
       tags: [],
+      range: getRange(ctx),
     });
   }
 
@@ -381,8 +448,12 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
 
   visitEnumEntryPlain(ctx: EnumEntryPlainContext): ast.EnumEntry {
     return create(ast.EnumEntry, {
-      name: create(ast.Identifier, { name: ctx.ID().text }),
+      name: create(ast.Identifier, {
+        name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
+      }),
       value: null,
+      range: getRange(ctx),
     });
   }
 
@@ -395,10 +466,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     return create(ast.AliasDec, {
-      left: create(ast.Identifier, { name: ctx.ID().text }),
+      left: create(ast.Identifier, {
+        name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
+      }),
       templateParams,
       alias: this.visit(ctx.vtype()),
       tags: [],
+      range: getRange(ctx),
     });
   }
 
@@ -416,10 +491,14 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     }
 
     return create(ast.StructDec, {
-      name: create(ast.Identifier, { name: ctx.ID().text }),
+      name: create(ast.Identifier, {
+        name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
+      }),
       declarations: decs.map((dec) => this.visit(dec)),
       templateParams,
       tags: [],
+      range: getRange(ctx),
     });
   }
 
@@ -438,7 +517,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       fnCall: create(ast.FunctionCallExpr, {
         fn: this.visit(ctx.expr()),
         params: ctx.fnCallParams() ? this.visit(ctx.fnCallParams()!) : [],
+        range: getRange(ctx),
       }),
+      range: getRange(ctx),
     });
   }
 
@@ -446,6 +527,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.MemberExpr, {
       object: this.visit(ctx._left),
       property: ctx._right.text!,
+      range: getRange(ctx),
     });
   }
 
@@ -453,6 +535,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.IfStatement, {
       condition: this.visit(ctx.expr()),
       scope: this.visit(ctx.scope()),
+      range: getRange(ctx),
     });
   }
 
@@ -462,10 +545,11 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return stmt;
   }
 
-  visitForInfinityStmt(_: ForInfinityStmtContext): ast.ForStatement {
+  visitForInfinityStmt(ctx: ForInfinityStmtContext): ast.ForStatement {
     // Return incomplete For Statement.
     return create(ast.ForStatement, {
       scope: undefined,
+      range: getRange(ctx),
     });
   }
 
@@ -473,6 +557,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
     return create(ast.ForExprStatement, {
       expr: this.visit(ctx.expr()),
       scope: undefined,
+      range: getRange(ctx),
     });
   }
 
@@ -482,6 +567,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
       id: ctx.ID().text,
       type: ctx.vtype() ? (this.visit(ctx.vtype()!) as ast.Type) : undefined,
       scope: undefined,
+      range: getRange(ctx),
     });
   }
 
@@ -507,6 +593,7 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .methodsContent()
         .methodsFnDef()
         .map((def) => this.visitFuncDec(def)),
+      range: getRange(ctx),
     });
   }
 
@@ -526,7 +613,10 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
         .traitFnDec()
         .map((dec) =>
           create(ast.TraitFnDec, {
-            name: create(ast.Identifier, { name: dec.ID().text }),
+            name: create(ast.Identifier, {
+              name: dec.ID().text,
+              range: getRangeFromTerminal(dec.ID()),
+            }),
             params: dec
               .fnType()
               .fnDefParam()
@@ -538,19 +628,23 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
                   return create(ast.FnParamDec, {
                     left: create(ast.Identifier, {
                       name: param.varDef().ID().text,
+                      range: getRangeFromTerminal(param.varDef().ID()),
                     }),
                     init: initExpr && this.visit(initExpr),
                     type: vtype && this.visit(vtype),
                     tags: [],
                     ellipsis: !!param.OPELIPSE(),
+                    range: getRange(param),
                   });
                 } else {
                   throw new Error("skip parameters are not yet defined");
                 }
               }),
             returns: this.visit(dec.fnReturnType()),
+            range: getRange(dec),
           })
         ),
+      range: getRange(ctx),
     });
   }
 
@@ -559,7 +653,9 @@ export class ParseTreeVisitor implements LuxParserVisitor<ast.Node> {
   }
 
   visitChildren(node: RuleNode): any {
-    throw "ParseTreeVisitor: " + node.constructor.name + " is unimplemented!";
+    throw new Error(
+      "ParseTreeVisitor: " + node.constructor.name + " is unimplemented!"
+    );
   }
 
   visitErrorNode(node: ErrorNode): any {

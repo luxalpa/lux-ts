@@ -30,6 +30,12 @@
     "onLanguage:plaintext"
   ],
   "contributes": {
+    "languages": [{
+      "id": "lux",
+      "extensions": [".lux"],
+      "aliases": ["Lux"],
+      "configuration": "./language-configuration.json"
+    }],
     "configuration": {
       "type": "object",
       "title": "Example configuration",
