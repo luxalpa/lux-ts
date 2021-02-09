@@ -47,7 +47,8 @@ export class TypeChecker {
         trait: types.NoTrait,
         numRequiredParams: 0,
         hasRestParam: false,
-      })
+      }),
+      null
     );
 
     mainCtx.addVariable(
@@ -60,7 +61,8 @@ export class TypeChecker {
         trait: types.NoTrait,
         numRequiredParams: 1,
         hasRestParam: false,
-      })
+      }),
+      null
     );
 
     this.visit({ node: node, context: mainCtx });
@@ -294,7 +296,7 @@ export class TypeChecker {
     for (const fn of functions) {
       const fnInfo = this.parseFunctionDecNode(fn, context);
       resolvedFunctions.push(fnInfo);
-      context.addVariable(fn.name.name, fnInfo.fnType);
+      context.addVariable(fn.name.name, fnInfo.fnType, fn.name);
     }
 
     return resolvedFunctions;
@@ -324,7 +326,7 @@ export class TypeChecker {
 
     if (behaviorTarget) {
       if (!isStatic) {
-        context.addVariable("this", behaviorTarget);
+        context.addVariable("this", behaviorTarget, null);
       }
 
       if (behaviorTarget instanceof types.Struct && behaviorTarget.template) {
@@ -347,8 +349,8 @@ export class TypeChecker {
     context.addType("Boolean", new types.Boolean());
     context.addType("Void", new types.Void());
     context.addType("String", new types.String());
-    context.addVariable("false", context.getTypeByString("Boolean"));
-    context.addVariable("true", context.getTypeByString("Boolean"));
+    context.addVariable("false", context.getTypeByString("Boolean"), null);
+    context.addVariable("true", context.getTypeByString("Boolean"), null);
 
     context.addType(
       "Array",
@@ -453,7 +455,7 @@ export class TypeChecker {
         struct.fields.set(node.left.name, type!);
       }
     } else {
-      context.addVariable(node.left.name, type!);
+      context.addVariable(node.left.name, type!, node.left);
     }
   }
 
@@ -587,7 +589,7 @@ export class TypeChecker {
     node,
     context,
   }: TypeCheckerContext<ast.IdentifierExpr>) {
-    const [v, id] = context.getVariable(node.id.name);
+    const [v, id] = context.getVariable(node.id);
     this.typemap.set(node, v);
     this.tracker.track(node, id);
   }
@@ -917,7 +919,7 @@ export class TypeChecker {
         "For-loop must run on an Iterator",
         node.expr.range
       );
-      ctx.addVariable(node.id, types.ErrorType);
+      ctx.addVariable(node.id, types.ErrorType, node);
       this.visit({ node: node.scope!, context: ctx });
       return;
     }
@@ -943,13 +945,13 @@ export class TypeChecker {
           node.type.range
         );
 
-        ctx.addVariable(node.id, types.ErrorType);
+        ctx.addVariable(node.id, types.ErrorType, node);
         this.visit({ node: node.scope!, context: ctx });
         return;
       }
     }
 
-    ctx.addVariable(node.id, resultReturn);
+    ctx.addVariable(node.id, resultReturn, node);
     this.visit({ node: node.scope!, context: ctx });
   }
 
@@ -964,6 +966,11 @@ export class TypeChecker {
     context,
   }: TypeCheckerContext<ast.BreakStatement>) {
     // Intentionally left blank.
+  }
+
+  visitErrorExpr({ node, context }: TypeCheckerContext<ast.BreakStatement>) {
+    this.diagnostics.error("Expression expected", node.range);
+    this.typemap.set(node, types.ErrorType);
   }
 }
 

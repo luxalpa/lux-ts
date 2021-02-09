@@ -7,6 +7,8 @@ export namespace ast {
 
   export class Expr extends Node {}
 
+  export class ErrorExpr extends Expr {}
+
   export enum InfixOperator {
     Addition = "+",
     Subtraction = "-",

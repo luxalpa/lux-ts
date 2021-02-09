@@ -6,12 +6,11 @@ function main() => Integer {
 }*/
 
 function main() => Integer {
-    v := 100
-    x := "String"
-    v = x
+    v := "dragon"
+    args(100, 300)
 }
 
-function args(...vars: MyStruct<Integer>) => {
+function args(...vars: Array<Integer>) => {
 
 }
 

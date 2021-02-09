@@ -259,11 +259,14 @@ export class Context {
     return typeNode;
   }
 
-  addVariable(name: string, type: TypeNode) {
+  addVariable(name: string, type: TypeNode, astNode: ast.Node | null) {
     for (const [i, v] of this.variables.entries()) {
       if (v.name === name) {
         // if (!(v.type instanceof Function)) {
-        throw new Error(`Variable ${name} is already defined`);
+        this.diagnostics.error(
+          `Variable ${name} is already defined`,
+          astNode!.range
+        );
         // } else {
         //   TODO: Make sure we don't define the same type twice! This is implemented for overloads which are currently not supported
         // }
@@ -286,14 +289,14 @@ export class Context {
     }
   }
 
-  getVariable(name: string): [TypeNode, number] {
+  getVariable(identifier: ast.Identifier): [TypeNode, number] {
     for (const ctx of this.getAllContexts()) {
-      const v = ctx.variables.find((e) => name === e.name);
+      const v = ctx.variables.find((e) => identifier.name === e.name);
       if (v) {
         return [v.type, v.id];
       }
 
-      const result = ctx.types.get(name);
+      const result = ctx.types.get(identifier.name);
       if (result) {
         const [type, id] = result;
         if (type instanceof StructFactory) {
@@ -303,7 +306,11 @@ export class Context {
       }
     }
 
-    throw new Error(`Variable ${name} not found`);
+    this.diagnostics.error(
+      `Variable ${identifier.name} not found`,
+      identifier.range
+    );
+    return [ErrorType, -1];
   }
 }
 

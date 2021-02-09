@@ -57,6 +57,7 @@ import {
   LvalueArrayAccessContext,
   MacroStatementContext,
   MacroExprContext,
+  ExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
@@ -667,8 +668,32 @@ export class ParseTreeVisitor
     });
   }
 
-  visit(tree: ParseTree): any {
-    return tree.accept(this);
+  visitExpr(ctx: ExprContext): ast.ErrorExpr {
+    return create(ast.ErrorExpr, {
+      range: getRange(ctx),
+    });
+  }
+
+  visit(n: ParseTree): any {
+    if (!n) {
+      throw new Error("visit: Node is undefined");
+    }
+
+    let fnName = n.constructor.name;
+    if (fnName.endsWith("Context")) {
+      fnName = fnName.slice(0, -"Context".length);
+    }
+
+    if (fnName == "Object") {
+      throw new Error(`Object without type: (${JSON.stringify(n)})`);
+    }
+    let fn = this[("visit" + fnName) as keyof ParseTreeVisitor] as (
+      ctx: ParseTree
+    ) => any;
+    if (!fn) {
+      throw new Error(`Parser: ${fnName} is unimplemented!`);
+    }
+    return fn.call(this, n);
   }
 
   visitChildren(node: RuleNode): any {
@@ -678,6 +703,7 @@ export class ParseTreeVisitor
   }
 
   visitErrorNode(node: ErrorNode): any {
+    console.log("Visiting Error", node);
     return undefined;
   }
 
