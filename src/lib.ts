@@ -12,7 +12,9 @@ import { ast } from "./ast";
 import { readFileSync } from "fs";
 import { DiagnosticsManager } from "./diagnostics";
 
-export interface Options extends TranspilerOptions {}
+export interface Options extends TranspilerOptions {
+  compileOnly: boolean;
+}
 
 export interface CompilerContext {
   external(
@@ -96,7 +98,7 @@ export function compileCode(
   const typeChecker = new TypeChecker(diagnosticsManager);
   const { typemap } = typeChecker.checkProgram(program);
 
-  if (diagnosticsManager.hasErrors()) {
+  if (diagnosticsManager.hasErrors() || options?.compileOnly) {
     return {
       code: "",
       diagnostics: diagnosticsManager,

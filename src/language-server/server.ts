@@ -18,6 +18,7 @@ import {
 } from "vscode-languageserver/node";
 
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { compileCode } from "../lib";
 
 export function lspCreateAndListen() {
   // Create a connection for the server, using Node's IPC as a transport.
@@ -143,45 +144,49 @@ export function lspCreateAndListen() {
     let settings = await getDocumentSettings(textDocument.uri);
 
     // The validator creates diagnostics for all uppercase words length 2 and more
-    let text = textDocument.getText();
-    let pattern = /\b[A-Z]{2,}\b/g;
-    let m: RegExpExecArray | null;
+    const text = textDocument.getText();
 
-    let problems = 0;
-    let diagnostics: Diagnostic[] = [];
-    while (
-      (m = pattern.exec(text)) &&
-      problems < settings.maxNumberOfProblems
-    ) {
-      problems++;
-      let diagnostic: Diagnostic = {
-        severity: DiagnosticSeverity.Warning,
-        range: {
-          start: textDocument.positionAt(m.index),
-          end: textDocument.positionAt(m.index + m[0].length),
-        },
-        message: `${m[0]} is all uppercase.`,
-        source: "ex",
-      };
-      if (hasDiagnosticRelatedInformationCapability) {
-        diagnostic.relatedInformation = [
-          {
-            location: {
-              uri: textDocument.uri,
-              range: Object.assign({}, diagnostic.range),
+    const { diagnostics: result } = compileCode(text, { compileOnly: true });
+
+    const diagnostics: Diagnostic[] = [];
+
+    if (result.hasErrors()) {
+      for (const msg of result.diagnostics) {
+        let diagnostic: Diagnostic = {
+          severity: DiagnosticSeverity.Error,
+          range: {
+            start: {
+              line: msg.range.start.line - 1,
+              character: msg.range.start.col,
             },
-            message: "Spelling matters",
-          },
-          {
-            location: {
-              uri: textDocument.uri,
-              range: Object.assign({}, diagnostic.range),
+            end: {
+              line: msg.range.end.line - 1,
+              character: msg.range.end.col,
             },
-            message: "Particularly for names",
           },
-        ];
+          message: msg.text,
+          source: "lux-compiler",
+        };
+        // if (hasDiagnosticRelatedInformationCapability) {
+        //   diagnostic.relatedInformation = [
+        //     {
+        //       location: {
+        //         uri: textDocument.uri,
+        //         range: Object.assign({}, diagnostic.range),
+        //       },
+        //       message: "Spelling matters",
+        //     },
+        //     {
+        //       location: {
+        //         uri: textDocument.uri,
+        //         range: Object.assign({}, diagnostic.range),
+        //       },
+        //       message: "Particularly for names",
+        //     },
+        //   ];
+        // }
+        diagnostics.push(diagnostic);
       }
-      diagnostics.push(diagnostic);
     }
 
     // Send the computed diagnostics to VSCode.
