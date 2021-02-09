@@ -22,7 +22,13 @@ function main() {
 
   if (argv.run) {
     const input = readFileSync(argv.run);
-    const code = compileCode(input.toString());
+    const { code, diagnostics } = compileCode(input.toString());
+
+    if (diagnostics.hasErrors()) {
+      diagnostics.print(argv.run);
+      return;
+    }
+
     console.log(code);
     console.log("=== RUNNING ===");
     const v = eval(code);

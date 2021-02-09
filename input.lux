@@ -16,7 +16,7 @@ function main() => Integer {
 }*/
 
 function main() => Integer {
-    v := 10
+    v := "10"
     return v
 }
 

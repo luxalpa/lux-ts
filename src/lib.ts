@@ -10,6 +10,7 @@ import { TypeChecker } from "./typechecker";
 import { CharStreams } from "antlr4ts/CharStreams";
 import { ast } from "./ast";
 import { readFileSync } from "fs";
+import { DiagnosticsManager } from "./diagnostics";
 
 export interface Options extends TranspilerOptions {}
 
@@ -79,28 +80,57 @@ export function buildASTProgram(input: string): ASTBuilderResult {
   };
 }
 
-export function compileCode(input: string, options?: Partial<Options>): string {
+export interface CompilationResult {
+  code: string;
+  diagnostics: DiagnosticsManager;
+}
+
+export function compileCode(
+  input: string,
+  options?: Partial<Options>
+): CompilationResult {
+  const diagnosticsManager = new DiagnosticsManager();
+
   const { program, transpilerImports } = buildASTProgram(input);
 
-  const typeChecker = new TypeChecker();
+  const typeChecker = new TypeChecker(diagnosticsManager);
   const { typemap } = typeChecker.checkProgram(program);
+
+  if (diagnosticsManager.hasErrors()) {
+    return {
+      code: "",
+      diagnostics: diagnosticsManager,
+    };
+  }
 
   const transpiler = new Transpiler(typemap);
   const v = transpiler.transpileProgram(program, transpilerImports, options);
 
-  return generate(v as any);
+  return {
+    code: generate(v as any),
+    diagnostics: diagnosticsManager,
+  };
 }
 
 export function runCode(input: string, options?: Partial<Options>): any {
-  const code = compileCode(input, options);
+  const { code, diagnostics } = compileCode(input, options);
+  if (diagnostics.hasErrors()) {
+    throw new Error("Can't run code with errors");
+  }
   return eval(code);
 }
 
 export function runMacro(expr: ast.Expr, ctx: CompilerContext): ast.Node[] {
   // TODO: This probably needs to support other macro statements as well
+  const diagnosticsManager = new DiagnosticsManager();
 
-  const typeChecker = new TypeChecker();
+  const typeChecker = new TypeChecker(diagnosticsManager);
   const { typemap } = typeChecker.checkExpr(expr);
+
+  if (diagnosticsManager.hasErrors()) {
+    diagnosticsManager.print();
+    throw new Error("Errors during macro invokation"); // TODO: Resolve
+  }
 
   const transpiler = new Transpiler(typemap);
   const v = transpiler.transpileExpr(expr);
@@ -118,8 +148,15 @@ export function runAstExpr(
   target: ast.Declaration,
   ctx: CompilerContext
 ) {
-  const typeChecker = new TypeChecker();
+  const diagnosticsManager = new DiagnosticsManager();
+
+  const typeChecker = new TypeChecker(diagnosticsManager);
   const { typemap } = typeChecker.checkExpr(expr);
+
+  if (diagnosticsManager.hasErrors()) {
+    diagnosticsManager.print();
+    throw new Error("Errors during macro invokation"); // TODO: Resolve
+  }
 
   const transpiler = new Transpiler(typemap);
   const v = transpiler.transpileExpr(expr);

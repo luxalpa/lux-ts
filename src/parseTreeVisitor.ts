@@ -59,7 +59,8 @@ import {
   MacroExprContext,
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
-import { ast, Range } from "./ast";
+import { ast } from "./ast";
+import { Range } from "./diagnostics";
 import { create } from "./util";
 import { CompilerContext, runAstExpr, runMacro } from "./lib";
 import { ParserRuleContext } from "antlr4ts/ParserRuleContext";

@@ -1,4 +1,6 @@
-import { ast, NoRange } from "./ast";
+import { ast } from "./ast";
+import { DiagnosticsManager, NoRange } from "./diagnostics";
+
 import * as types from "./typenodes";
 import { FunctionPointer, makeFunctionType, TypeNode, Void } from "./typenodes";
 import { create, getFromTypemap, TypeMap } from "./util";
@@ -20,6 +22,7 @@ interface TypeCheckerContext<T extends ast.Node> {
 export class TypeChecker {
   typemap: TypeMap = new Map<ast.Node, types.TypeNode>();
   tracker = new IdentityTracker(); // TODO: This is a bit messy, either we make the TypeChecker reusable or we don't.
+  constructor(private diagnostics: DiagnosticsManager) {}
 
   checkExpr(
     node: ast.Expr
@@ -595,11 +598,14 @@ export class TypeChecker {
     const rightType = getFromTypemap(this.typemap, node.right);
 
     if (!isTypeEqual(leftType, rightType)) {
-      throw new Error(
+      this.diagnostics.error(
         `Operator '${node.operator}' can not be applied to types ${getTypeName(
           leftType
-        )} and ${getTypeName(rightType)}`
+        )} and ${getTypeName(rightType)}`,
+        node.range
       );
+      this.typemap.set(node, types.ErrorType);
+      return;
     }
 
     switch (node.operator) {
@@ -632,11 +638,13 @@ export class TypeChecker {
       : context.getTypeByString("Void");
 
     if (!isTypeEqual(fn.returns, exprType)) {
-      throw new Error(
+      this.diagnostics.error(
         `Type '${getTypeName(
           exprType
-        )}' is not assignable to type '${getTypeName(fn.returns)}'`
+        )}' is not assignable to type '${getTypeName(fn.returns)}'`,
+        node.range
       );
+      return;
     }
   }
 
@@ -849,6 +857,10 @@ export function isTypeEqual(
   // Strong is the type that must be fulfilled, weak is the type that can be adjusted.
 
   if (weak === strong) {
+    return true;
+  }
+
+  if (weak == types.ErrorType || strong == types.ErrorType) {
     return true;
   }
 

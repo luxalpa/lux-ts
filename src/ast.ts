@@ -1,22 +1,4 @@
-export interface Position {
-  line: number;
-  col: number;
-}
-
-export interface Range {
-  start: Position;
-  end: Position;
-}
-
-export const NoPosition: Position = {
-  line: -1,
-  col: -1,
-};
-
-export const NoRange: Range = {
-  start: NoPosition,
-  end: NoPosition,
-};
+import { Range } from "./diagnostics";
 
 export namespace ast {
   export class Node {

@@ -22,7 +22,7 @@ export class TypeNode {}
 
 export const NoType = new TypeNode();
 
-export class ErrorType extends TypeNode {}
+export const ErrorType = new TypeNode();
 
 export class TypeWithMethods extends TypeNode {
   // We can define methods on any type, so we need this as a common object.
