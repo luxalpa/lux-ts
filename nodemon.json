@@ -1,5 +1,5 @@
 {
   "ext": "js,lux,json,ts",
   "exec": "ts-node src/main.ts --run ./input.lux",
-  "ignore": ["src/testing.ts", "src/tests/*"]
+  "ignore": ["src/testing.ts", "src/tests/*", "build/*"]
 }

@@ -510,7 +510,7 @@ export class Transpiler {
       optional: false,
       property: {
         type: "Identifier",
-        name: e.property,
+        name: e.property.name,
       },
       computed: false,
     };
@@ -673,7 +673,7 @@ export class Transpiler {
         if (!value) {
           expr = defaultValueForType(type);
         } else {
-          expr = this.visit(value);
+          expr = this.visit(value.expr);
         }
 
         return expr;

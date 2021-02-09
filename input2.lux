@@ -15,3 +15,13 @@ trait Any {}
 methods Integer for Any {}
 methods String for Any {}
 @external() console: Console
+
+@external() struct Process {
+    argv: Array<String>
+}
+
+@external() process: Process
+
+@external() methods Array<T> {
+    slice(n: Integer) => Array<T>
+}

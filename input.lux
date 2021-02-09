@@ -1,25 +1,20 @@
 /*$include("input2.lux")
 
-@external() struct Process {
-    argv: Array<String>
-}
-
-@external() process: Process
-
-@external() methods Array<T> {
-    slice(n: Integer) => Array<T>
-}
-
 function main() => Integer {
     v := yargs(process.argv.slice(2))
     return 0
 }*/
 
 function main() => Integer {
-    v := "10"
-    return v
+    v := 100
+    x := "String"
+    v = x
 }
 
-function drago() => String {
-    return 100 + "Phoenix"
+function args(...vars: MyStruct<Integer>) => {
+
+}
+
+struct MyStruct<T: Type> {
+
 }

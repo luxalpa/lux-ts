@@ -3,6 +3,7 @@ import { create, TypeMap } from "./util";
 import { getTypeName, TypeChecker } from "./typechecker";
 import cloneDeep from "lodash.clonedeep";
 import { IdentityTracker } from "./identityTracker";
+import { DiagnosticsManager } from "./diagnostics";
 
 export class TypeMethods {
   methods = new Map<Trait, Function[]>();
@@ -152,19 +153,24 @@ interface ContextSymbol {
 }
 
 export class Context {
+  // TODO: Rework Context functions to no longer be on the class in order to avoid storing the tracker and the diagnostics over and over.
   parent?: Context;
   types: Map<string, [TypeNode, number]>;
   variables: ContextSymbol[];
   owner?: Function;
 
-  constructor(private tracker: IdentityTracker, parent?: Context) {
+  constructor(
+    private tracker: IdentityTracker,
+    private diagnostics: DiagnosticsManager,
+    parent?: Context
+  ) {
     this.types = new Map<string, [TypeNode, number]>();
     this.variables = [];
     this.parent = parent;
   }
 
   addSubContext(): Context {
-    return new Context(this.tracker, this);
+    return new Context(this.tracker, this.diagnostics, this);
   }
 
   addType(name: string, type: TypeNode) {
@@ -194,7 +200,12 @@ export class Context {
   // Resolves the type of type AST nodes
   getType(node: ast.Type): TypeNode {
     if (node instanceof ast.PlainType) {
-      return this.getTypeByString(node.name, node.templateParams);
+      const t = this.getTypeByString(node.name, node.templateParams);
+      if (t == ErrorType) {
+        // TODO: This error multiplies for each template invokation if the type is part of a function in a methods block
+        this.diagnostics.error(`No such type: ${node.name}`, node.range);
+      }
+      return t;
     }
     if (node instanceof ast.RefType) {
       const ref = this.getType(node.type);
@@ -223,7 +234,7 @@ export class Context {
     }
 
     if (!typeNode) {
-      throw new Error(`Type "${name}" not found`);
+      return ErrorType;
     }
 
     if (params.length > 0) {
@@ -375,10 +386,10 @@ export class StructFactory extends TypeWithMethods {
   }
 
   abstractStruct(): Struct {
-    return this.resolve(this.templateParams);
+    return this.resolve(this.templateParams, true);
   }
 
-  resolve(templateParams: TypeNode[]): Struct {
+  resolve(templateParams: TypeNode[], isAbstract = false): Struct {
     const cached = this.findCached(templateParams);
     if (cached !== undefined) {
       return cached;
@@ -436,11 +447,15 @@ export class StructFactory extends TypeWithMethods {
     }
 
     for (let dec of n.declarations) {
-      this.typeChecker.visitVarDec({
-        node: dec,
-        context: templateSubContext,
-        struct,
-      });
+      this.typeChecker.visitVarDec(
+        {
+          node: dec,
+          context: templateSubContext,
+          struct,
+        },
+        // We only want to show diagnostics the first time this is being parsed
+        this.resolvedStructs.length != 1
+      );
     }
 
     return struct;
@@ -576,7 +591,8 @@ export function makeFunctionType(
       ? context.getType(node.returns)
       : context.getTypeByString("Void"),
     isStatic: false,
-    numRequiredParams: parameters.length - numOptionalParms,
+    numRequiredParams:
+      parameters.length - numOptionalParms - (hasRestParam ? 1 : 0),
     belongsTo,
     hasRestParam,
   });

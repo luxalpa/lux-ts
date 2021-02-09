@@ -42,7 +42,7 @@ export namespace ast {
 
   export class MemberExpr extends Expr {
     object: Expr;
-    property: string;
+    property: Identifier;
   }
 
   export class ArrayAccessExpr extends Expr {
@@ -56,13 +56,14 @@ export namespace ast {
 
   export class ObjectLiteralExpr extends Expr {
     type?: PlainType;
-    entries: Map<string, Expr>;
+    entries: Map<string, { expr: Expr; range: Range }>;
   }
 
   export class Methods extends Node {
-    type: string;
+    type: Identifier;
     trait?: Type;
-    templateParams: string[];
+    templateParams: Identifier[];
+    templateParamsRange: Range;
     functions: FunctionDec[];
   }
 

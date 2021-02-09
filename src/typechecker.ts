@@ -29,7 +29,7 @@ export class TypeChecker {
   ): {
     typemap: TypeMap;
   } {
-    const mainCtx = new types.Context(this.tracker);
+    const mainCtx = new types.Context(this.tracker, this.diagnostics);
 
     this.addExternals(mainCtx);
 
@@ -78,7 +78,7 @@ export class TypeChecker {
   } {
     this.typemap = new Map<ast.Node, types.TypeNode>();
 
-    const mainCtx = new types.Context(this.tracker);
+    const mainCtx = new types.Context(this.tracker, this.diagnostics);
     this.addExternals(mainCtx);
 
     const mainScope = {
@@ -106,7 +106,7 @@ export class TypeChecker {
 
   // Resolve does a first run over the code in order to register all globally accessible names.
   resolve(context: types.Context, tree: ast.Program): ResolvedFunctionInfo[] {
-    const behaviors = new Array<ast.Methods>();
+    const methodBlocks = new Array<ast.Methods>();
     const functions = new Array<ast.FunctionDec>();
     const resolvedFunctions = new Array<ResolvedFunctionInfo>();
     const plainStructs = new Array<[types.Struct, types.StructFactory]>();
@@ -153,7 +153,7 @@ export class TypeChecker {
       }
       // We do the Behaviors and Functions later
       else if (n instanceof ast.Methods) {
-        behaviors.push(n);
+        methodBlocks.push(n);
       } else if (n instanceof ast.FunctionDec) {
         functions.push(n);
       } else if (n instanceof ast.Trait) {
@@ -183,52 +183,65 @@ export class TypeChecker {
     }
 
     // Methods
-    for (const behavior of behaviors) {
+    for (const methods of methodBlocks) {
       const behaviorContext = context.addSubContext();
 
-      if (behavior.templateParams.length > 0) {
-        const struct = context.getStructFactory(behavior.type);
+      if (methods.templateParams.length > 0) {
+        const struct = context.getStructFactory(methods.type.name);
 
-        if (behavior.templateParams.length !== struct.templateParams.length) {
-          throw new Error(
-            `Behavior on type '${behavior.type}' has incorrect number of template params`
+        if (methods.templateParams.length !== struct.templateParams.length) {
+          this.diagnostics.error(
+            `Methods on type '${methods.type.name}' has incorrect number of template params`,
+            methods.templateParamsRange
           );
         }
 
-        for (let i = 0; i < behavior.templateParams.length; i++) {
-          const paramName = behavior.templateParams[i];
+        for (
+          let i = 0;
+          i <
+          Math.min(methods.templateParams.length, struct.templateParams.length);
+          i++
+        ) {
+          const paramName = methods.templateParams[i];
           const paramType = struct.templateParams[i];
-          behaviorContext.addType(paramName, paramType);
+          behaviorContext.addType(paramName.name, paramType);
         }
       }
 
-      let type = context.getTypeByString(behavior.type);
+      let type = context.getTypeByString(methods.type.name);
+      if (type == types.ErrorType) {
+        this.diagnostics.error(`No such type: "${type}"`, methods.type.range);
+        continue;
+      }
 
       if (type instanceof types.StructFactory) {
         type = type.abstractStruct();
       }
 
       if (!(type instanceof types.TypeWithMethods)) {
-        throw new Error(`Can't define methods on type ${getTypeName(type)}`);
+        this.diagnostics.error(
+          `Can't define methods on type ${getTypeName(type)}`,
+          methods.type.range
+        );
+        continue;
       }
 
       let trait = types.NoTrait;
-      if (behavior.trait) {
-        const t = context.getType(behavior.trait);
+      if (methods.trait) {
+        const t = context.getType(methods.trait);
         if (t instanceof types.Trait) {
           trait = t;
-          this.typemap.set(behavior.trait, t);
+          this.typemap.set(methods.trait, t);
           type.typeMethods.implementedTraits.add(t);
-        } else {
-          throw new Error(
-            `Methods must be added for traits, but ${getTypeName(
-              t
-            )} is not a trait.`
+        } else if (t != types.ErrorType) {
+          this.diagnostics.error(
+            `${getTypeName(t)} is not a trait.`,
+            methods.trait.range
           );
         }
       }
 
-      for (const fn of behavior.functions) {
+      for (const fn of methods.functions) {
         const resolvedFn = this.parseFunctionDecNode(
           fn,
           behaviorContext,
@@ -241,13 +254,16 @@ export class TypeChecker {
             (traitFn) => traitFn.name === resolvedFn.fnType.name
           );
           if (!traitFn) {
-            throw new Error(
-              `Function ${resolvedFn.fnType.name} does not exist on trait ${trait.name}`
+            this.diagnostics.error(
+              `Function ${resolvedFn.fnType.name} does not exist on trait ${trait.name}`,
+              fn.range
             );
+            continue;
           }
           if (!isTypeEqual(traitFn, resolvedFn.fnType)) {
-            throw new Error(
-              `Function ${resolvedFn.fnType.name} has a different signature than on trait ${trait.name}`
+            this.diagnostics.error(
+              `Function ${resolvedFn.fnType.name} has a different signature than on trait ${trait.name}`,
+              fn.range
             );
           }
         }
@@ -258,21 +274,21 @@ export class TypeChecker {
 
     // trait check if all methods are implemented
 
-    for (const t of traitObjects) {
-      for (const trait of t.typeMethods.methods.keys()) {
-        if (trait == types.NoTrait) {
-          continue;
-        }
-        const fns = t.typeMethods.methods.get(trait)!;
-        if (fns.length != trait.methods.length) {
-          throw new Error(
-            `Not all functions from trait ${
-              trait.name
-            } have been implemented on ${getTypeName(t as types.TypeNode)}`
-          );
-        }
-      }
-    }
+    // for (const t of traitObjects) {
+    //   for (const trait of t.typeMethods.methods.keys()) {
+    //     if (trait == types.NoTrait) {
+    //       continue;
+    //     }
+    //     const fns = t.typeMethods.methods.get(trait)!;
+    //     if (fns.length != trait.methods.length) {
+    //       throw new Error(
+    //         `Not all functions from trait ${
+    //           trait.name
+    //         } have been implemented on ${getTypeName(t as types.TypeNode)}`
+    //       );
+    //     }
+    //   }
+    // }
 
     // functions
     for (const fn of functions) {
@@ -398,11 +414,10 @@ export class TypeChecker {
     return fn.call(this, ctx);
   }
 
-  visitVarDec({
-    node,
-    context,
-    struct,
-  }: TypeCheckerContext<ast.VarDec | ast.FnParamDec>) {
+  visitVarDec(
+    { node, context, struct }: TypeCheckerContext<ast.VarDec | ast.FnParamDec>,
+    skipDiagnostics: boolean = false
+  ) {
     let type: types.TypeNode | undefined;
 
     if (node.type) {
@@ -417,9 +432,11 @@ export class TypeChecker {
       if (node.init) {
         let t = getFromTypemap(this.typemap, node.init)!;
         if (!isTypeEqual(type!, t)) {
-          throw new Error(
-            `Expected ${getTypeName(type!)}, got ${getTypeName(t!)}`
-          );
+          !skipDiagnostics &&
+            this.diagnostics.error(
+              `Expected ${getTypeName(type!)}, got ${getTypeName(t!)}`,
+              node.init.range
+            );
         }
       }
     } else {
@@ -427,15 +444,25 @@ export class TypeChecker {
     }
     if (struct) {
       if (struct.fields.has(node.left.name)) {
-        throw new Error("Field in struct is already defined");
+        !skipDiagnostics &&
+          this.diagnostics.error(
+            "Field in struct is already defined",
+            node.range
+          );
+      } else {
+        struct.fields.set(node.left.name, type!);
       }
-      struct.fields.set(node.left.name, type!);
     } else {
       context.addVariable(node.left.name, type!);
     }
   }
 
   visitFnParamDec(ctx: TypeCheckerContext<ast.FnParamDec>) {
+    // Template parameters have already been checked for errors.
+    const b = ctx.context.getOwner()?.belongsTo;
+    if (b && b instanceof types.Struct && b.template?.params.length) {
+      return this.visitVarDec(ctx, true);
+    }
     return this.visitVarDec(ctx);
   }
 
@@ -452,15 +479,30 @@ export class TypeChecker {
   }: TypeCheckerContext<ast.FunctionCallExpr>) {
     this.visit({ node: node.fn, context });
     const fnType = this.typemap.get(node.fn)!;
+
+    if (fnType == types.ErrorType) {
+      this.typemap.set(node, types.ErrorType);
+      return;
+    }
+
     if (!(fnType instanceof types.Function)) {
-      console.error(fnType);
-      throw new Error("Function Call on non-function");
+      this.diagnostics.error(
+        `Function Call on ${getTypeName(fnType)}`,
+        node.fn.range
+      );
+      this.typemap.set(node, types.ErrorType);
+      return;
     }
     if (
       node.params.length < fnType.numRequiredParams ||
       (node.params.length > fnType.parameters.length && !fnType.hasRestParam)
     ) {
-      throw new Error("Function Call has incorrect number of arguments");
+      this.diagnostics.error(
+        "Function Call has incorrect number of arguments",
+        node.range
+      );
+      this.typemap.set(node, types.ErrorType);
+      return;
     }
 
     const restParamIdx = fnType.parameters.length - 1;
@@ -476,7 +518,12 @@ export class TypeChecker {
         ) {
           typeParam = arr.template.factory.getStructParams(arr)[0];
         } else {
-          throw new Error("Currently we support only Arrays as varargs");
+          // TODO: Should be checked when defining the function
+          this.diagnostics.error(
+            "Currently we support only Arrays as varargs",
+            node.range
+          );
+          typeParam = types.ErrorType;
         }
       } else {
         typeParam = fnType.parameters[i];
@@ -485,10 +532,11 @@ export class TypeChecker {
       this.visit({ node: node.params[i], context, expectedType: typeParam });
       const nodeParam = getFromTypemap(this.typemap, node.params[i]);
       if (!isTypeEqual(typeParam, nodeParam)) {
-        throw new Error(
+        this.diagnostics.error(
           `Type mismatch in call to function ${
             fnType.name
-          }: Can't pass ${getTypeName(nodeParam)} as ${getTypeName(typeParam)}`
+          }: Can't pass ${getTypeName(nodeParam)} as ${getTypeName(typeParam)}`,
+          node.params[i].range
         );
       }
     }
@@ -504,18 +552,26 @@ export class TypeChecker {
     ) as types.Struct;
 
     if (!(t instanceof types.MetaType)) {
-      const v = types.getMember(t, node.property);
+      const v = types.getMember(t, node.property.name);
       if (!v) {
-        throw new Error(
-          `Property '${node.property}' does not exist on '${getTypeName(t)}'`
+        this.diagnostics.error(
+          `Property '${node.property.name}' does not exist on '${getTypeName(
+            t
+          )}'`,
+          node.property.range
         );
+        this.typemap.set(node, types.ErrorType);
+        return;
       }
       this.typemap.set(node, v);
     } else {
       if (t.type instanceof types.Enum) {
         const e = t.type;
-        if (!e.members.includes(node.property)) {
-          throw `Property ${node.property} not found on Enum ${e.name}`;
+        if (!e.members.includes(node.property.name)) {
+          this.diagnostics.error(
+            `Property ${node.property.name} not found on Enum ${e.name}`,
+            node.property.range
+          );
         }
         this.typemap.set(node, e);
         return;
@@ -556,10 +612,16 @@ export class TypeChecker {
     this.visit({ node: node.expr, context });
     const t = getFromTypemap(this.typemap, node.expr);
 
-    if (!(t instanceof types.RefType)) {
-      throw new Error("Can only dereference pointers");
+    if (t == types.ErrorType) {
+      this.typemap.set(node, types.ErrorType);
+      return;
     }
 
+    if (!(t instanceof types.RefType)) {
+      this.diagnostics.error("Can only dereference pointers", node.range);
+      this.typemap.set(node, types.ErrorType);
+      return;
+    }
     this.typemap.set(node, t.ref);
   }
 
@@ -582,10 +644,11 @@ export class TypeChecker {
     const rightType = getFromTypemap(this.typemap, node.right);
 
     if (!isTypeEqual(leftType, rightType)) {
-      throw new Error(
+      this.diagnostics.error(
         `Type '${getTypeName(
           rightType
-        )}' is not assignable to type '${getTypeName(leftType)}'`
+        )}' is not assignable to type '${getTypeName(leftType)}'`,
+        node.right.range
       );
     }
   }
@@ -623,14 +686,18 @@ export class TypeChecker {
     node,
     context,
   }: TypeCheckerContext<ast.ReturnStatement>) {
+    if (node.expr) {
+      this.visit({ node: node.expr, context });
+    }
+
     const fn = context.getOwner();
 
     if (fn === null) {
-      throw new Error("Return statement must be inside function!");
-    }
-
-    if (node.expr) {
-      this.visit({ node: node.expr, context });
+      this.diagnostics.error(
+        "Return statement must be inside function!",
+        node.range
+      );
+      return;
     }
 
     const exprType = node.expr
@@ -662,16 +729,21 @@ export class TypeChecker {
       this.visit({ node: node.property, context, expectedType: elementType });
       const propertyType = getFromTypemap(this.typemap, node.property);
       if (!isTypeEqual(context.getTypeByString("Integer"), propertyType)) {
-        throw new Error(
+        this.diagnostics.error(
           `Array access type mismatch: Expected Integer, got ${getTypeName(
             propertyType
-          )}`
+          )}`,
+          node.property.range
         );
       }
       this.typemap.set(node, elementType);
     } else {
-      // TODO: Implement for iterables, maps
-      throw new Error("Array access currently only implemented for arrays");
+      // TODO: Implement for iterables, maps, strings
+      this.diagnostics.error(
+        "Array access currently only implemented for arrays",
+        node.range
+      );
+      this.typemap.set(node, types.ErrorType);
     }
   }
 
@@ -691,9 +763,12 @@ export class TypeChecker {
           expectedType
         )[0];
       } else {
-        throw new Error(
-          "List initializers are currently only supported on native Arrays"
+        this.diagnostics.error(
+          "List initializers are currently only supported on native Arrays",
+          node.range
         );
+        this.typemap.set(node, expectedType);
+        return;
       }
 
       for (const e of node.entries) {
@@ -702,16 +777,23 @@ export class TypeChecker {
         const exp = getFromTypemap(this.typemap, e);
 
         if (!isTypeEqual(elementType, exp)) {
-          throw new Error(
-            `Expected: ${getTypeName(elementType)}, got: ${getTypeName(exp)}`
+          this.diagnostics.error(
+            `Expected: ${getTypeName(elementType)}, got: ${getTypeName(exp)}`,
+            e.range
           );
+          this.typemap.set(node, expectedType);
+          return;
         }
       }
 
       this.typemap.set(node, expectedType);
     } else {
       // TODO: Add implicit typing
-      throw new Error("Using Array literals as lvalues is not yet supported");
+      this.diagnostics.error(
+        "Using untyped Array literals is not yet supported",
+        node.range
+      );
+      this.typemap.set(node, types.ErrorType);
     }
   }
 
@@ -721,20 +803,32 @@ export class TypeChecker {
   }: TypeCheckerContext<ast.ObjectLiteralExpr>) {
     const struct = context.getType(node.type!); // TODO: Get this to work for implicit literals
     if (!(struct instanceof types.Struct)) {
-      throw new Error("Constructor type needs to be a struct");
+      this.diagnostics.error(
+        "Constructor type needs to be a struct",
+        node.type!.range
+      );
+      this.typemap.set(node, types.ErrorType);
+      return;
     }
 
     for (let [key, value] of node.entries) {
       const keyType = struct.fields.get(key);
       if (!keyType) {
-        throw new Error(`Key ${key} does not exist on ${struct.name}`);
+        this.diagnostics.error(
+          `Key ${key} does not exist on ${struct.name}`,
+          value.range
+        );
+        continue;
       }
 
-      this.visit({ node: value, context, expectedType: keyType });
-      let t = getFromTypemap(this.typemap, value)!;
+      this.visit({ node: value.expr, context, expectedType: keyType });
+      let t = getFromTypemap(this.typemap, value.expr)!;
 
       if (!isTypeEqual(keyType, t)) {
-        throw new Error(`Type mismatch in ${struct.name} for ${key}`);
+        this.diagnostics.error(
+          `Type mismatch in ${struct.name} for ${key}`,
+          value.expr.range
+        );
       }
     }
 
@@ -747,7 +841,10 @@ export class TypeChecker {
       getFromTypemap(this.typemap, node.condition) !==
       (context.getTypeByString("Boolean") as types.TypeNode)
     ) {
-      throw new Error("If condition must be boolean!");
+      this.diagnostics.error(
+        "If condition must be Boolean",
+        node.condition.range
+      );
     }
     let ctx = context.addSubContext();
     for (const stmt of node.scope.statements) {
@@ -816,36 +913,56 @@ export class TypeChecker {
     }
 
     if (trait == types.NoTrait) {
-      throw new Error("For-loop must run on an Iterator");
+      this.diagnostics.error(
+        "For-loop must run on an Iterator",
+        node.expr.range
+      );
+      ctx.addVariable(node.id, types.ErrorType);
+      this.visit({ node: node.scope!, context: ctx });
+      return;
     }
 
     const nextReturn = trait.methods.find((fn) => fn.name === "next")!.returns;
 
     if (!(nextReturn instanceof types.Struct)) {
+      // TODO: Hardcode the Iterator struct into the language defs
       throw new Error("next function must return a struct");
     }
 
     const resultReturn = nextReturn.fields.get("value");
 
     if (!resultReturn) {
+      // TODO: Hardcode the Iterator struct into the language defs
       throw new Error("result struct must have a value field");
     }
 
     if (node.type) {
       if (!isTypeEqual(context.getType(node.type), resultReturn)) {
-        throw new Error("For Expression type does not match requested type!");
+        this.diagnostics.error(
+          "For Expression type does not match requested type!",
+          node.type.range
+        );
+
+        ctx.addVariable(node.id, types.ErrorType);
+        this.visit({ node: node.scope!, context: ctx });
+        return;
       }
     }
 
     ctx.addVariable(node.id, resultReturn);
+    this.visit({ node: node.scope!, context: ctx });
+  }
 
-    for (const stmt of node.scope!.statements) {
-      // TODO: Add visitor for scope
-      this.visit({ node: stmt, context: ctx });
+  visitScope({ node, context }: TypeCheckerContext<ast.Scope>) {
+    for (const stmt of node.statements) {
+      this.visit({ node: stmt, context });
     }
   }
 
-  visitBreakStatement(n: ast.BreakStatement, context: types.Context) {
+  visitBreakStatement({
+    node,
+    context,
+  }: TypeCheckerContext<ast.BreakStatement>) {
     // Intentionally left blank.
   }
 }

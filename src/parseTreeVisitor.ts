@@ -60,7 +60,7 @@ import {
 } from "../parser-ts/LuxParser";
 import { ErrorNode, ParseTree, RuleNode, TerminalNode } from "antlr4ts/tree";
 import { ast } from "./ast";
-import { Range } from "./diagnostics";
+import { NoRange, Range } from "./diagnostics";
 import { create } from "./util";
 import { CompilerContext, runAstExpr, runMacro } from "./lib";
 import { ParserRuleContext } from "antlr4ts/ParserRuleContext";
@@ -158,9 +158,12 @@ export class ParseTreeVisitor
   }
 
   visitObjectLiteralExpr(ctx: ObjectLiteralExprContext): ast.ObjectLiteralExpr {
-    let entries = new Map<string, ast.Expr>();
+    let entries = new Map<string, { expr: ast.Expr; range: Range }>();
     for (let entry of ctx.objectLiteralEntry()) {
-      entries.set(entry.ID().text, this.visit(entry.expr()));
+      entries.set(entry.ID().text, {
+        expr: this.visit(entry.expr()),
+        range: getRangeFromTerminal(entry.ID()),
+      });
     }
 
     return create(ast.ObjectLiteralExpr, {
@@ -337,7 +340,10 @@ export class ParseTreeVisitor
   visitLvalueMember(ctx: LvalueMemberContext): ast.MemberExpr {
     return create(ast.MemberExpr, {
       object: this.visit(ctx._left),
-      property: ctx._right.text!,
+      property: create(ast.Identifier, {
+        name: ctx._right.text!,
+        range: getRangeFromToken(ctx._right),
+      }),
       range: getRange(ctx),
     });
   }
@@ -527,7 +533,10 @@ export class ParseTreeVisitor
   visitMemberExpr(ctx: MemberExprContext): ast.MemberExpr {
     return create(ast.MemberExpr, {
       object: this.visit(ctx._left),
-      property: ctx._right.text!,
+      property: create(ast.Identifier, {
+        name: ctx._right.text!,
+        range: getRangeFromToken(ctx._right),
+      }),
       range: getRange(ctx),
     });
   }
@@ -573,21 +582,27 @@ export class ParseTreeVisitor
   }
 
   visitMethodsDec(ctx: MethodsDecContext): ast.Methods {
-    const tmpl = ctx.tmplMethods();
-
-    let templateParams: string[] = [];
+    let templateParams: ast.Identifier[] = [];
 
     if (ctx.tmplMethods()) {
       templateParams = ctx
         .tmplMethods()!
         .ID()
-        .map((node) => node.text);
+        .map((node) =>
+          create(ast.Identifier, {
+            name: node.text,
+            range: getRangeFromTerminal(node),
+          })
+        );
     }
 
     const plainType = ctx.plainType();
 
     return create(ast.Methods, {
-      type: ctx.ID().text,
+      type: create(ast.Identifier, {
+        name: ctx.ID().text,
+        range: getRangeFromTerminal(ctx.ID()),
+      }),
       templateParams,
       trait: plainType ? this.visit(plainType) : undefined,
       functions: ctx
@@ -595,6 +610,9 @@ export class ParseTreeVisitor
         .methodsFnDef()
         .map((def) => this.visitFuncDec(def)),
       range: getRange(ctx),
+      templateParamsRange: ctx.tmplMethods()
+        ? getRange(ctx.tmplMethods()!)
+        : NoRange,
     });
   }
 

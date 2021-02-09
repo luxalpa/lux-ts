@@ -146,47 +146,57 @@ export function lspCreateAndListen() {
     // The validator creates diagnostics for all uppercase words length 2 and more
     const text = textDocument.getText();
 
-    const { diagnostics: result } = compileCode(text, { compileOnly: true });
-
     const diagnostics: Diagnostic[] = [];
 
-    if (result.hasErrors()) {
-      for (const msg of result.diagnostics) {
-        let diagnostic: Diagnostic = {
-          severity: DiagnosticSeverity.Error,
-          range: {
-            start: {
-              line: msg.range.start.line - 1,
-              character: msg.range.start.col,
+    try {
+      const { diagnostics: result } = compileCode(text, { compileOnly: true });
+
+      if (result.hasErrors()) {
+        for (const msg of result.diagnostics) {
+          let diagnostic: Diagnostic = {
+            severity: DiagnosticSeverity.Error,
+            range: {
+              start: {
+                line: msg.range.start.line - 1,
+                character: msg.range.start.col,
+              },
+              end: {
+                line: msg.range.end.line - 1,
+                character: msg.range.end.col,
+              },
             },
-            end: {
-              line: msg.range.end.line - 1,
-              character: msg.range.end.col,
-            },
-          },
-          message: msg.text,
-          source: "lux-compiler",
-        };
-        // if (hasDiagnosticRelatedInformationCapability) {
-        //   diagnostic.relatedInformation = [
-        //     {
-        //       location: {
-        //         uri: textDocument.uri,
-        //         range: Object.assign({}, diagnostic.range),
-        //       },
-        //       message: "Spelling matters",
-        //     },
-        //     {
-        //       location: {
-        //         uri: textDocument.uri,
-        //         range: Object.assign({}, diagnostic.range),
-        //       },
-        //       message: "Particularly for names",
-        //     },
-        //   ];
-        // }
-        diagnostics.push(diagnostic);
+            message: msg.text,
+            source: "lux-compiler",
+          };
+          // if (hasDiagnosticRelatedInformationCapability) {
+          //   diagnostic.relatedInformation = [
+          //     {
+          //       location: {
+          //         uri: textDocument.uri,
+          //         range: Object.assign({}, diagnostic.range),
+          //       },
+          //       message: "Spelling matters",
+          //     },
+          //     {
+          //       location: {
+          //         uri: textDocument.uri,
+          //         range: Object.assign({}, diagnostic.range),
+          //       },
+          //       message: "Particularly for names",
+          //     },
+          //   ];
+          // }
+          diagnostics.push(diagnostic);
+        }
       }
+    } catch (e) {
+      diagnostics.push({
+        message: "EXCEPTION: " + e.message,
+        range: {
+          start: textDocument.positionAt(0),
+          end: textDocument.positionAt(999999),
+        },
+      });
     }
 
     // Send the computed diagnostics to VSCode.
