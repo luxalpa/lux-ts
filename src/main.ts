@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import yargs from "yargs";
 import { compileCode } from "./lib";
+import { Scanner, Token } from "./scanner";
 
 function main() {
   const argv = yargs(process.argv.slice(2))
@@ -22,6 +23,26 @@ function main() {
 
   if (argv.run) {
     const input = readFileSync(argv.run);
+
+    const scanner = new Scanner(`
+    func main() {
+      return this.value
+    }
+    `);
+    while (true) {
+      const token = scanner.scan();
+      if (token == Token.EndOfFile) {
+        break;
+      }
+      if (token >= Token.String) {
+        console.log(`${Token[token]} ${scanner.value}`);
+      } else {
+        console.log(`${Token[token]}`);
+      }
+    }
+
+    return;
+
     const { code, diagnostics } = compileCode(input.toString());
 
     if (diagnostics.hasErrors()) {
