@@ -358,7 +358,6 @@ export class TypeChecker {
         this,
         create(ast.StructDec, {
           range: NoRange,
-          tags: [],
           declarations: [],
           name: create(ast.Identifier, {
             name: "Array",
@@ -366,7 +365,6 @@ export class TypeChecker {
           }),
           templateParams: [
             create(ast.VarDec, {
-              tags: [],
               range: NoRange,
               left: create(ast.Identifier, {
                 name: "T",

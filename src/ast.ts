@@ -25,6 +25,17 @@ export namespace ast {
     right: Expr;
   }
 
+  export enum UnaryOperator {
+    Copy = "+",
+    Negative = "-",
+    Not = "!",
+  }
+
+  export class UnaryExpression extends Expr {
+    operator: UnaryOperator;
+    expr: Expr;
+  }
+
   export class Number extends Expr {
     value: number;
   }
@@ -141,11 +152,6 @@ export namespace ast {
     params: FnParamDec[];
     body?: Scope;
     returns?: Type;
-    tags: Tag[];
-  }
-
-  export class Tag extends Node {
-    expr: Expr;
   }
 
   export class Scope extends Node {
@@ -153,14 +159,12 @@ export namespace ast {
   }
 
   export class VarDec extends Declaration {
-    tags: Tag[];
     left: Identifier;
     type?: Type;
     init?: Expr;
   }
 
   export class FnParamDec extends Declaration {
-    tags: Tag[];
     left: Identifier;
     type?: Type;
     init?: Expr;
@@ -168,13 +172,11 @@ export namespace ast {
   }
 
   export class EnumDec extends Declaration {
-    tags: Tag[];
     name: Identifier;
     entries: EnumEntry[];
   }
 
   export class StructDec extends Declaration {
-    tags: Tag[];
     name: Identifier;
     declarations: VarDec[];
     templateParams: VarDec[];
@@ -197,7 +199,7 @@ export namespace ast {
   }
 
   export class FunctionPtrType extends Type {
-    params: VarDec[];
+    params: FnParamDec[];
     returns: Type;
   }
 
@@ -206,7 +208,6 @@ export namespace ast {
   }
 
   export class AliasDec extends Declaration {
-    tags: Tag[];
     left: Identifier;
     templateParams: VarDec[];
     alias: Type;

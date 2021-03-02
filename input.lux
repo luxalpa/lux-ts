@@ -5,15 +5,6 @@ function main() => Integer {
     return 0
 }*/
 
-function main() => Integer {
-    v := "dragon"
-    args(100, 300)
-}
-
-function args(...vars: Array<Integer>) => {
-
-}
-
-struct MyStruct<T: Type> {
-
+main: () => Integer {
+    return 1 + (2 - 3)
 }

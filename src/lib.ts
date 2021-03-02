@@ -11,6 +11,8 @@ import { CharStreams } from "antlr4ts/CharStreams";
 import { ast } from "./ast";
 import { readFileSync } from "fs";
 import { DiagnosticsManager } from "./diagnostics";
+import { Scanner } from "./scanner";
+import { Parser } from "./parser";
 
 export interface Options extends TranspilerOptions {
   compileOnly: boolean;
@@ -31,14 +33,10 @@ interface ASTBuilderResult {
   transpilerImports: Map<ast.Declaration, TranspilerImport | undefined>;
 }
 
-export function buildASTProgram(input: string): ASTBuilderResult {
-  const inputStream = CharStreams.fromString(input);
-  const lexer = new LuxLexer(inputStream);
-  const tokenStream = new CommonTokenStream(lexer);
-  const parser = new LuxParser(tokenStream) as any;
-  parser.buildParseTrees = true;
-  const tree = parser.program();
-
+export function buildASTProgram(
+  input: string,
+  diagnosticsManager: DiagnosticsManager
+): ASTBuilderResult {
   const transpilerImports = new Map<
     ast.Declaration,
     TranspilerImport | undefined
@@ -64,7 +62,7 @@ export function buildASTProgram(input: string): ASTBuilderResult {
     },
     include(filename: string): ast.Node[] {
       const code = readFileSync(filename);
-      const p = buildASTProgram(code.toString());
+      const p = buildASTProgram(code.toString(), diagnosticsManager);
       for (let [key, value] of p.transpilerImports.entries()) {
         transpilerImports.set(key, value);
       }
@@ -73,8 +71,9 @@ export function buildASTProgram(input: string): ASTBuilderResult {
     },
   };
 
-  const visitor = new ParseTreeVisitor(ctx);
-  const program = tree.accept(visitor);
+  const scanner = new Scanner(input);
+  const parser = new Parser(scanner, diagnosticsManager);
+  const program = parser.parseProgram();
 
   return {
     program,
@@ -93,7 +92,10 @@ export function compileCode(
 ): CompilationResult {
   const diagnosticsManager = new DiagnosticsManager();
 
-  const { program, transpilerImports } = buildASTProgram(input);
+  const { program, transpilerImports } = buildASTProgram(
+    input,
+    diagnosticsManager
+  );
 
   const typeChecker = new TypeChecker(diagnosticsManager);
   const { typemap } = typeChecker.checkProgram(program);

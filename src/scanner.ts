@@ -1,3 +1,5 @@
+import { NoPosition, Position } from "./diagnostics";
+
 export enum Token {
   EndOfFile,
   NewLine,
@@ -54,7 +56,6 @@ export enum Token {
   Match,
   Enum,
   Alias,
-  Func,
   String,
   Number,
   Identifier,
@@ -78,7 +79,6 @@ const keywords: Record<string, Token> = {
   and: Token.LogicalAnd,
   or: Token.LogicalOr,
   struct: Token.Struct,
-  func: Token.Func,
   impl: Token.Impl,
   if: Token.If,
   else: Token.Else,
@@ -94,18 +94,57 @@ const keywords: Record<string, Token> = {
 };
 
 export class Scanner {
-  constructor(public text: string) {}
+  constructor(public text: string) {
+    this.lineOffsets = [0];
+  }
 
-  pos: number = 0;
-  begin: number;
+  private pos: number = 0;
+  private begin: number;
+  private lineOffsets: number[];
+
+  tokenStart() {
+    return this.begin;
+  }
+
+  tokenEnd() {
+    return this.pos;
+  }
+
+  getDiagPosition(pos: number): Position {
+    // TODO: Binary search
+    // We should probably only create the lineOffsets array after parsing for files that require diagnostics.
+    for (let i = this.lineOffsets.length - 1; i >= 0; i--) {
+      const offset = this.lineOffsets[i];
+      if (offset <= pos) {
+        return {
+          col: pos - offset,
+          line: i,
+        };
+      }
+    }
+
+    return NoPosition;
+  }
+
+  diagStart() {
+    return this.getDiagPosition(this.tokenStart());
+  }
+
+  diagEnd() {
+    return this.getDiagPosition(this.tokenEnd());
+  }
 
   value: string;
 
-  getChar(offset: number = 0) {
+  private newLine() {
+    this.lineOffsets.push(this.pos + 1); // new line starts after the line feed char.
+  }
+
+  private getChar(offset: number = 0) {
     return this.text.charAt(this.pos + offset);
   }
 
-  skipWhitespaceAndComments() {
+  private skipWhitespaceAndComments() {
     while (true) {
       const ch = this.getChar();
       if (ch != " " && ch != "\t" && ch != "\r") {
@@ -124,7 +163,7 @@ export class Scanner {
     }
   }
 
-  scanIdentifier() {
+  private scanIdentifier() {
     this.value = "";
     while (true) {
       const ch = this.getChar();
@@ -136,7 +175,7 @@ export class Scanner {
     }
   }
 
-  scanString(delimiter: string) {
+  private scanString(delimiter: string) {
     this.value = "";
 
     while (true) {
@@ -145,26 +184,35 @@ export class Scanner {
         // TODO: Support escape sequences and stuff
         break;
       }
+
+      if (ch == "\n") {
+        this.newLine();
+      }
+
       this.pos++;
       this.value += ch;
     }
   }
 
-  skipSingleLineComment() {
+  private skipSingleLineComment() {
     this.pos += 2;
     while (this.getChar() != "\n") {
       this.pos++;
     }
   }
 
-  skipMultiLineComment() {
+  private skipMultiLineComment() {
     this.pos += 2;
     while (this.getChar() != "*" && this.getChar(1) != "/") {
+      if (this.getChar() == "\n") {
+        this.newLine();
+      }
       this.pos++;
     }
+    this.pos += 2;
   }
 
-  scanNumber() {
+  private scanNumber() {
     this.value = "";
     while (true) {
       const ch = this.getChar();
@@ -176,7 +224,7 @@ export class Scanner {
     }
   }
 
-  scanKeywordOrIdent(): Token {
+  private scanKeywordOrIdent(): Token {
     this.scanIdentifier();
     if (Object.keys(keywords).includes(this.value)) {
       return keywords[this.value];
@@ -204,6 +252,7 @@ export class Scanner {
 
     switch (ch) {
       case "\n":
+        this.newLine();
         this.pos++;
         return Token.NewLine;
       case "":
