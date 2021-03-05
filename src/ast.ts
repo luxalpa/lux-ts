@@ -92,6 +92,7 @@ export namespace ast {
     returns: Type;
   }
 
+  // TODO: Convert to Unary Expr
   export class RefExpr extends Expr {
     expr: Expr;
   }
@@ -106,8 +107,22 @@ export namespace ast {
 
   export class Statement extends Node {}
 
+  export enum AssignmentOperator {
+    Set = "=",
+    Increment = "+=",
+    Decrement = "-=",
+    Multiply = "*=",
+    Divide = "/=",
+    Modulo = "%=",
+    Or = "|=",
+    And = "&=",
+    Xor = "^=",
+    Optional = "?=",
+  }
+
   export class AssignmentStatement extends Statement {
     left: Expr;
+    op: AssignmentOperator;
     right: Expr;
   }
 

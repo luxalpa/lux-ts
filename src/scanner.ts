@@ -6,6 +6,7 @@ export enum Token {
   Plus,
   Minus,
   Equals,
+  Set,
   Colon,
   LCurl,
   RCurl,
@@ -59,6 +60,7 @@ export enum Token {
   String,
   Number,
   Identifier,
+  TypeIdentifier,
   MacroIdentifier,
   DecoratorIdentifier,
 }
@@ -226,6 +228,13 @@ export class Scanner {
 
   private scanKeywordOrIdent(): Token {
     this.scanIdentifier();
+
+    const firstChar = this.value[0];
+
+    if (firstChar >= "A" && firstChar <= "Z") {
+      return Token.TypeIdentifier;
+    }
+
     if (Object.keys(keywords).includes(this.value)) {
       return keywords[this.value];
     }
@@ -359,8 +368,12 @@ export class Scanner {
           this.pos += 2;
           return Token.Arrow;
         }
+        if (this.getChar(1) == "=") {
+          this.pos += 2;
+          return Token.Equals;
+        }
         this.pos++;
-        return Token.Equals;
+        return Token.Set;
       case "<":
         if (this.getChar(1) == "=") {
           this.pos += 2;

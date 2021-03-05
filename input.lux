@@ -1,10 +1,14 @@
 /*$include("input2.lux")
 
-function main() => Integer {
+main: () => Integer {
     v := yargs(process.argv.slice(2))
     return 0
 }*/
 
 main: () => Integer {
-    return 1 + (2 - 3)
+  return stuff(1, 2, 3)
+}
+
+stuff: (...params: Array<Integer>) => Integer {
+  return params[1]
 }

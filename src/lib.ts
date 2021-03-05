@@ -92,28 +92,33 @@ export function compileCode(
 ): CompilationResult {
   const diagnosticsManager = new DiagnosticsManager();
 
-  const { program, transpilerImports } = buildASTProgram(
-    input,
-    diagnosticsManager
-  );
+  try {
+    const { program, transpilerImports } = buildASTProgram(
+      input,
+      diagnosticsManager
+    );
 
-  const typeChecker = new TypeChecker(diagnosticsManager);
-  const { typemap } = typeChecker.checkProgram(program);
+    const typeChecker = new TypeChecker(diagnosticsManager);
+    const { typemap } = typeChecker.checkProgram(program);
 
-  if (diagnosticsManager.hasErrors() || options?.compileOnly) {
+    if (diagnosticsManager.hasErrors() || options?.compileOnly) {
+      return {
+        code: "",
+        diagnostics: diagnosticsManager,
+      };
+    }
+
+    const transpiler = new Transpiler(typemap);
+    const v = transpiler.transpileProgram(program, transpilerImports, options);
+
     return {
-      code: "",
+      code: generate(v as any),
       diagnostics: diagnosticsManager,
     };
+  } catch (e) {
+    diagnosticsManager.print("input.lux");
+    throw e;
   }
-
-  const transpiler = new Transpiler(typemap);
-  const v = transpiler.transpileProgram(program, transpilerImports, options);
-
-  return {
-    code: generate(v as any),
-    diagnostics: diagnosticsManager,
-  };
 }
 
 export function runCode(input: string, options?: Partial<Options>): any {

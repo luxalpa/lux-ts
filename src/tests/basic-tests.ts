@@ -3,13 +3,13 @@ import { TestFn } from "../testing";
 export function basicTests(test: TestFn) {
   test(
     "basic",
-    `function main() => Integer {
+    `main: () => Integer {
         return 10
      }`
   ).expect(10);
   test(
     "pointers",
-    `function main() => Integer {
+    `main: () => Integer {
         x := 10
         y := &x
         *y = 5
@@ -19,21 +19,21 @@ export function basicTests(test: TestFn) {
   ).expect(5);
   test(
     "declaration-order",
-    `function main() => Integer {
+    `main: () => Integer {
         stuff()
         return 1
      }
      
-     function stuff() => {
+     stuff: () => {
         
      }
     `
   ).expect(1);
   test(
     "if-condition",
-    `function main() => Integer {
+    `main: () => Integer {
         x := 10
-        if x = 10 {
+        if x == 10 {
           return 1
         }
         return 0
@@ -140,11 +140,11 @@ export function basicTests(test: TestFn) {
   test(
     "optional-parameters",
     `
-    function main() => Integer {
+    main: () => Integer {
         return doStuff()
     }
     
-    function doStuff(x: Integer = 25) => Integer {
+    doStuff: (x: Integer = 25) => Integer {
         return x
     }
     `
@@ -153,7 +153,7 @@ export function basicTests(test: TestFn) {
   test(
     "arrays",
     `
-    function main() => Integer {
+    main: () => Integer {
       dragons: Array<Integer> = [10, 20]
       dragons[0] = 15
       dragons[1] = 30
@@ -165,11 +165,11 @@ export function basicTests(test: TestFn) {
   test(
     "variadic-functions",
     `
-    function main() => Integer {
+    main: () => Integer {
       return stuff(1, 2, 3)
     }
     
-    function stuff(...params: Array<Integer>) => Integer {
+    stuff: (...params: Array<Integer>) => Integer {
       return params[1]
     }
     `

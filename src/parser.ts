@@ -17,6 +17,15 @@ const infixOperators: Partial<Record<Token, OpInfo>> = {
   [Token.Mult]: { precedence: 2, infix: ast.InfixOperator.Multiplication },
 };
 
+const assignmentOperators: Partial<Record<Token, ast.AssignmentOperator>> = {
+  [Token.Set]: ast.AssignmentOperator.Set,
+  [Token.PlusEquals]: ast.AssignmentOperator.Increment,
+  [Token.MinusEquals]: ast.AssignmentOperator.Decrement,
+  [Token.DivEquals]: ast.AssignmentOperator.Divide,
+  [Token.MultEquals]: ast.AssignmentOperator.Multiply,
+  [Token.PercentEquals]: ast.AssignmentOperator.Modulo,
+};
+
 export class Parser {
   constructor(
     public scanner: Scanner,
@@ -68,7 +77,7 @@ export class Parser {
     const declarations = new Array<ast.Declaration>();
 
     while (this.token() != Token.EndOfFile) {
-      const dec = this.parseTopLevelStatement();
+      const dec = this.parseStatement(true);
       if (dec) {
         declarations.push(dec);
       }
@@ -81,39 +90,6 @@ export class Parser {
         end: this.getEnd(),
       },
     });
-  }
-
-  parseTopLevelStatement(): ast.Declaration | undefined {
-    if (this.token() == Token.Identifier) {
-      return this.parseFnVarDec();
-    }
-    if (this.token() == Token.NewLine) {
-      this.nextToken();
-      return;
-    }
-    this.diagnostics.error(`Unexpected Token: ${Token[this.token()]}`, {
-      start: this.getStart(),
-      end: this.getEnd(),
-    });
-    this.nextToken();
-  }
-
-  parseFnVarDec(): ast.Declaration | undefined {
-    const name = this.scanner.value;
-
-    const nameIdent = create(ast.Identifier, {
-      name,
-      range: {
-        start: this.getStart(),
-        end: this.getEnd(),
-      },
-    });
-
-    this.nextToken();
-    this.expect(Token.Colon);
-    if (this.token() == Token.LParen) {
-      return this.parseFnDec(nameIdent);
-    }
   }
 
   parseFnDec(name: ast.Identifier): ast.FunctionDec | undefined {
@@ -141,7 +117,6 @@ export class Parser {
     // eat '{'
     const start = this.getStart();
     this.nextToken();
-    this.expect(Token.NewLine);
     const statements = this.parseList(Token.RCurl, () =>
       this.parseStatement(false)
     );
@@ -157,13 +132,127 @@ export class Parser {
   parseStatement(onlyDeclarations: true): ast.Declaration | undefined;
   parseStatement(onlyDeclarations: false): ast.Statement | undefined;
   parseStatement(onlyDeclarations: boolean): ast.Statement | undefined {
-    if (this.token() == Token.Return) {
-      const ret = this.parseReturn();
-      this.expect(Token.NewLine);
-      return ret;
+    const token = this.token();
+
+    if (!onlyDeclarations) {
+      if (token == Token.Return) {
+        return this.parseReturn();
+      }
+
+      if (token == Token.Mult || token == Token.LParen) {
+        const left = this.parseExpr();
+        return this.parseAssignmentStatement(left);
+      }
+
+      if (token == Token.If) {
+        return this.parseIfStatement();
+      }
     }
-    console.log(Token[this.token()]);
+
+    if (token == Token.NewLine) {
+      this.nextToken();
+      return;
+    }
+
+    if (token == Token.Identifier) {
+      const name = this.scanner.value;
+      const start = this.getStart();
+
+      const nameIdent = create(ast.Identifier, {
+        name,
+        range: {
+          start,
+          end: this.getEnd(),
+        },
+      });
+
+      this.nextToken();
+
+      if (
+        this.token() == Token.Colon ||
+        this.token() == Token.ImplicitDecAssign
+      ) {
+        return this.parseDec(nameIdent);
+      }
+
+      if (this.token() == Token.LParen) {
+        const expr = this.parseUnaryExprIdent(name, start);
+
+        if (!(expr instanceof ast.FunctionCallExpr)) {
+          this.diagnostics.error(
+            `Expected Function call expr, got ${expr.constructor.name}`,
+            {
+              start: expr.range.start,
+              end: expr.range.end,
+            }
+          );
+          return;
+        }
+
+        return create(ast.FunctionCallStmt, {
+          range: {
+            start: expr.range.start,
+            end: expr.range.end,
+          },
+          fnCall: expr,
+        });
+      }
+
+      let left: ast.Expr = create(ast.IdentifierExpr, {
+        range: {
+          start: nameIdent.range.start,
+          end: nameIdent.range.end,
+        },
+        id: nameIdent,
+      });
+
+      left = this.parsePostfixExpr(left);
+
+      return this.parseAssignmentStatement(left);
+    }
+
+    console.log(Token[this.token()], this.scanner.value, this.getStart());
     throw new Error("To be implemented");
+  }
+
+  parseIfStatement(): ast.IfStatement {
+    const start = this.getStart();
+    this.nextToken(); // eat "if"
+    const condition = this.parseExpr();
+    const scope = this.parseScope();
+    return create(ast.IfStatement, {
+      condition,
+      scope,
+      range: {
+        start,
+        end: condition.range.end,
+      },
+    });
+  }
+
+  parseAssignmentStatement(left: ast.Expr): ast.AssignmentStatement {
+    let op = assignmentOperators[this.token()];
+    if (!op) {
+      this.diagnostics.error(
+        `Expected assignment operator, got ${Token[this.token()]}`,
+        {
+          start: this.getStart(),
+          end: this.getEnd(),
+        }
+      );
+      op = ast.AssignmentOperator.Set;
+    }
+    this.nextToken();
+    const right = this.parseExpr();
+    return create(ast.AssignmentStatement, {
+      range: {
+        start: left.range.start,
+        end: right.range.end,
+      },
+      right,
+      left,
+      op,
+    });
   }
 
   parseReturn(): ast.ReturnStatement {
@@ -177,6 +266,58 @@ export class Parser {
         end: this.getEnd(),
       },
     });
+  }
+
+  parseDec(nameIdent: ast.Identifier): ast.Declaration | undefined {
+    // eat ':'
+    if (this.token() == Token.Colon) {
+      this.nextToken();
+      if (this.token() == Token.LParen) {
+        return this.parseFnDec(nameIdent);
+      }
+
+      if (
+        !(
+          this.token() == Token.TypeIdentifier ||
+          this.token() == Token.Reference
+        )
+      ) {
+        this.diagnostics.error(`Expected Type`, {
+          start: this.getStart(),
+          end: this.getEnd(),
+        });
+        return;
+      }
+      const type = this.parseType();
+      let init: ast.Expr | undefined;
+      if (this.token() == Token.Set) {
+        this.nextToken();
+        init = this.parseExpr();
+      }
+      return create(ast.VarDec, {
+        range: {
+          start: nameIdent.range.start,
+          end: this.getPrevEnd(),
+        },
+        type,
+        init,
+        left: nameIdent,
+      });
+    }
+
+    if (this.token() == Token.ImplicitDecAssign) {
+      this.nextToken();
+      const init = this.parseExpr();
+
+      return create(ast.VarDec, {
+        range: {
+          start: nameIdent.range.start,
+          end: this.getPrevEnd(),
+        },
+        init,
+        left: nameIdent,
+      });
+    }
   }
 
   parseFnParamDec(): ast.FnParamDec {
@@ -211,6 +352,7 @@ export class Parser {
           end: this.getEnd(),
         },
       });
+      this.nextToken();
     }
 
     let type: ast.Type | undefined = undefined;
@@ -241,7 +383,7 @@ export class Parser {
         );
       }
       this.nextToken();
-    } else if (this.token() == Token.Equals) {
+    } else if (this.token() == Token.Set) {
       this.nextToken();
     } else {
       return param;
@@ -252,6 +394,10 @@ export class Parser {
 
   parseExpr(minprecedence: number = 0): ast.Expr {
     let expr = this.parseUnaryExpr();
+    return this.parseExpr1(expr);
+  }
+
+  parseExpr1(expr: ast.Expr, minprecedence: number = 0): ast.Expr {
     while (true) {
       const op = infixOperators[this.token()];
 
@@ -275,6 +421,64 @@ export class Parser {
     return expr;
   }
 
+  parsePostfixExpr(prefix: ast.Expr): ast.Expr {
+    while (true) {
+      if (this.token() == Token.LParen) {
+        this.nextToken();
+        const params = this.parseList(Token.RParen, () => this.parseExpr());
+        prefix = create(ast.FunctionCallExpr, {
+          range: {
+            start: prefix.range.start,
+            end: this.getPrevEnd(),
+          },
+          params,
+          fn: prefix,
+        });
+        continue;
+      }
+
+      if (this.token() == Token.LSquare) {
+        this.nextToken();
+        let params = this.parseList(Token.RSquare, () => this.parseExpr());
+        if (params.length > 1) {
+          params = [params[0]];
+          this.diagnostics.error(
+            `Array Access with multiple parameters not yet supported`,
+            {
+              start: prefix.range.start,
+              end: this.getPrevEnd(),
+            }
+          );
+        } else if (params.length == 0) {
+          params = [
+            create(ast.ErrorExpr, {
+              range: NoRange,
+            }),
+          ];
+          this.diagnostics.error(`Array Access requires at least 1 parameter`, {
+            start: prefix.range.start,
+            end: this.getPrevEnd(),
+          });
+        }
+
+        prefix = create(ast.ArrayAccessExpr, {
+          array: prefix,
+          range: {
+            start: prefix.range.start,
+            end: this.getPrevEnd(),
+          },
+          property: params[0],
+        });
+
+        continue;
+      }
+
+      break;
+    }
+
+    return prefix;
+  }
+
   parseUnaryExpr(): ast.Expr {
     const start = this.getStart();
 
@@ -283,6 +487,18 @@ export class Parser {
       const expr = this.parseExpr();
       this.expect(Token.RParen);
       return expr;
+    }
+
+    if (this.token() == Token.LSquare) {
+      this.nextToken();
+      const entries = this.parseList(Token.RSquare, () => this.parseExpr());
+      return create(ast.ArrayLiteralExpr, {
+        entries,
+        range: {
+          start,
+          end: this.getPrevEnd(),
+        },
+      });
     }
 
     if (this.token() == Token.Not) {
@@ -294,6 +510,18 @@ export class Parser {
           end: this.getPrevEnd(),
         },
         operator: ast.UnaryOperator.Not,
+        expr,
+      });
+    }
+
+    if (this.token() == Token.Reference) {
+      this.nextToken();
+      const expr = this.parseExpr();
+      return create(ast.RefExpr, {
+        range: {
+          start,
+          end: this.getPrevEnd(),
+        },
         expr,
       });
     }
@@ -310,8 +538,54 @@ export class Parser {
       });
     }
 
+    if (this.token() == Token.Identifier) {
+      const name = this.scanner.value;
+      this.nextToken();
+      return this.parseUnaryExprIdent(name, start);
+    }
+
+    if (this.token() == Token.Mult) {
+      this.nextToken();
+      const expr = this.parseExpr();
+      return create(ast.DerefExpr, {
+        expr,
+        range: {
+          start,
+          end: expr.range.end,
+        },
+      });
+    }
+
+    this.diagnostics.error(`Unexpected Token: ${Token[this.token()]}`, {
+      start,
+      end: this.getEnd(),
+    });
+
     this.nextToken();
-    return new ast.ErrorExpr();
+    return create(ast.ErrorExpr, {
+      range: {
+        start,
+        end: this.getEnd(),
+      },
+    });
+  }
+
+  parseUnaryExprIdent(name: string, start: Position): ast.Expr {
+    const id = create(ast.IdentifierExpr, {
+      range: {
+        start,
+        end: this.getEnd(),
+      },
+      id: create(ast.Identifier, {
+        range: {
+          start,
+          end: this.getEnd(),
+        },
+        name,
+      }),
+    });
+
+    return this.parsePostfixExpr(id);
   }
 
   parseType(): ast.Type | undefined {
@@ -339,7 +613,7 @@ export class Parser {
       });
     }
 
-    if (this.token() == Token.Identifier) {
+    if (this.token() == Token.TypeIdentifier) {
       const start = this.getStart();
       const name = this.scanner.value;
       let templateParams = new Array<ast.Type>();
@@ -372,12 +646,17 @@ export class Parser {
   parseList<T>(closeToken: Token, kind: () => T | undefined): Array<T> {
     const arr = new Array<T>();
 
-    if (this.token() == closeToken) {
-      this.nextToken();
-      return arr;
-    }
-
     while (true) {
+      if (this.token() == Token.NewLine) {
+        this.nextToken();
+        continue;
+      }
+
+      if (this.token() == closeToken) {
+        this.nextToken();
+        break;
+      }
+
       const v = kind();
       if (v) {
         arr.push(v);
@@ -395,6 +674,8 @@ export class Parser {
         });
         this.nextToken();
         break;
+      } else {
+        this.nextToken();
       }
     }
 

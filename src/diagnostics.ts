@@ -40,7 +40,9 @@ export class DiagnosticsManager {
   print(filename: string = "") {
     for (const diagnostic of this.diagnostics) {
       console.log(
-        `${filename}:${diagnostic.range.start.line}:${diagnostic.range.start.col} - error: ${diagnostic.text}`
+        `${filename}:${diagnostic.range.start.line + 1}:${
+          diagnostic.range.start.col + 1
+        } - error: ${diagnostic.text}`
       );
     }
   }
