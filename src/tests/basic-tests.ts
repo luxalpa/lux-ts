@@ -42,7 +42,7 @@ export function basicTests(test: TestFn) {
   ).expect(1);
   test(
     "traits",
-    `function main() => Integer {
+    `main: () => Integer {
         obj := MyStruct<Integer> { 
           kind: 10
           value: 0 
@@ -52,16 +52,16 @@ export function basicTests(test: TestFn) {
         return obj.value
      }
      
-     struct MyStruct<T: Type> {
+     MyStruct<T: Type>: struct {
         kind: T
         value: Integer
      }
      
-     trait Setter<T: Type> {
+     Setter<T: Type>: trait {
         run(param: T) => Void 
      }
      
-     methods MyStruct<T> for Setter<Integer> {
+     impl Setter<Integer> for MyStruct<T> {
         run(param: Integer) => {
            this.value = param
         }

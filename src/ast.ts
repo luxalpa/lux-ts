@@ -81,7 +81,7 @@ export namespace ast {
   }
 
   export class Trait extends Node {
-    name: string;
+    name: Identifier;
     templateParams: VarDec[];
     functions: TraitFnDec[];
   }

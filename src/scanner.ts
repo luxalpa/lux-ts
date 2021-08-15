@@ -393,6 +393,7 @@ export class Scanner {
         const delim = ch;
         this.pos++;
         this.scanString(delim);
+        this.pos++;
         return Token.String;
       default:
         throw new Error("Unknown token");

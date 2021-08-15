@@ -161,9 +161,9 @@ export class TypeChecker {
       } else if (n instanceof ast.Trait) {
         const trait =
           n.templateParams.length == 0
-            ? new types.Trait(n.name)
-            : new types.TraitFactory(n.name);
-        context.addType(n.name, trait);
+            ? new types.Trait(n.name.name)
+            : new types.TraitFactory(n.name.name);
+        context.addType(n.name.name, trait);
         traits.push([trait, n]);
       }
     }

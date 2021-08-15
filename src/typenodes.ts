@@ -448,7 +448,7 @@ export class StructFactory extends TypeWithMethods {
         templateSubContext.addType(paramDef.left.name, paramVal);
       } else {
         throw new Error(
-          "Template Params other than Type are not yet supported"
+          `Template Params other than Type are not yet supported`
         );
       }
     }

@@ -6,9 +6,18 @@ main: () => Integer {
 }*/
 
 main: () => Integer {
-  return stuff(1, 2, 3)
-}
+    obj := MyStruct<Integer> {
+      kind: 10
+      value: 0
+    }
+    return obj.value
+ }
 
-stuff: (...params: Array<Integer>) => Integer {
-  return params[1]
-}
+ MyStruct<T: Type>: struct {
+    kind: T
+    value: Integer
+ }
+
+ Setter<T: Type>: trait {
+    run(param: T) => Void
+ }

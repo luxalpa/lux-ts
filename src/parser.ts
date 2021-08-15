@@ -1,7 +1,7 @@
 import { Scanner, Token } from "./scanner";
 import { ast } from "./ast";
 import { create } from "./util";
-import { DiagnosticsManager, NoRange, Position } from "./diagnostics";
+import { DiagnosticsManager, NoRange, Position, Range } from "./diagnostics";
 
 interface OpInfo {
   infix: ast.InfixOperator;
@@ -60,7 +60,7 @@ export class Parser {
   expect(token: Token) {
     if (this.token() != token) {
       this.diagnostics.error(
-        `expected ${Token[token]}, got ${Token[this.token()]}`,
+        `expect: expected ${Token[token]}, got ${Token[this.token()]}`,
         {
           start: this.getStart(),
           end: this.getEnd(),
@@ -74,14 +74,9 @@ export class Parser {
     this.nextToken();
 
     const start = this.getStart();
-    const declarations = new Array<ast.Declaration>();
-
-    while (this.token() != Token.EndOfFile) {
-      const dec = this.parseStatement(true);
-      if (dec) {
-        declarations.push(dec);
-      }
-    }
+    const declarations = this.parseList(Token.EndOfFile, () =>
+      this.parseStatement(true)
+    );
 
     return create(ast.Program, {
       declarations,
@@ -149,9 +144,33 @@ export class Parser {
       }
     }
 
-    if (token == Token.NewLine) {
+    if (token == Token.TypeIdentifier) {
+      const name = this.scanner.value;
+      const start = this.getStart();
+
+      const nameIdent = create(ast.Identifier, {
+        name,
+        range: {
+          start,
+          end: this.getEnd(),
+        },
+      });
+
       this.nextToken();
-      return;
+      let templateParams = new Array<ast.VarDec>();
+      if (this.token() == Token.LessThan) {
+        this.nextToken();
+        templateParams = this.parseList(Token.GreaterThan, () =>
+          this.parseTemplateParamDec()
+        );
+      }
+      this.expect(Token.Colon);
+      if (this.token() == Token.Struct) {
+        return this.parseStructDec(nameIdent, templateParams);
+      }
+      if (this.token() == Token.Trait) {
+        return this.parseTraitDec(nameIdent, templateParams);
+      }
     }
 
     if (token == Token.Identifier) {
@@ -211,8 +230,173 @@ export class Parser {
       return this.parseAssignmentStatement(left);
     }
 
-    console.log(Token[this.token()], this.scanner.value, this.getStart());
-    throw new Error("To be implemented");
+    this.diagnostics.error(`Unexpected Token: ${Token[this.token()]}`, {
+      start: this.getStart(),
+      end: this.getEnd(),
+    });
+    this.nextToken();
+  }
+
+  parseStructDec(
+    nameIdent: ast.Identifier,
+    templateParams: ast.VarDec[]
+  ): ast.StructDec {
+    this.nextToken(); // eat "struct"
+
+    this.expect(Token.LCurl);
+    const declarations = this.parseList(Token.RCurl, () =>
+      this.parseStructFieldDec()
+    );
+    return create(ast.StructDec, {
+      range: {
+        start: nameIdent.range.start,
+        end: this.getPrevEnd(),
+      },
+      name: nameIdent,
+      declarations,
+      templateParams,
+    });
+  }
+
+  parseTemplateParamDec(): ast.VarDec | undefined {
+    const start = this.getStart();
+
+    if (this.token() != Token.TypeIdentifier) {
+      this.diagnostics.error(
+        `Expected Type Identifier, got: ${Token[this.token()]}`,
+        {
+          start,
+          end: this.getEnd(),
+        }
+      );
+      this.nextToken();
+      while (true) {
+        if (
+          this.token() == Token.GreaterThan ||
+          this.token() == Token.Comma ||
+          this.token() == Token.NewLine
+        ) {
+          return;
+        }
+        this.nextToken();
+      }
+    }
+    const left = create(ast.Identifier, {
+      range: {
+        start,
+        end: this.getEnd(),
+      },
+      name: this.scanner.value,
+    });
+
+    this.nextToken();
+
+    this.expect(Token.Colon);
+
+    if (this.token() != Token.TypeIdentifier) {
+      this.nextToken();
+      return;
+    }
+
+    const type = this.parsePlainType();
+
+    return create(ast.VarDec, {
+      range: {
+        start: left.range.start,
+        end: type.range.end,
+      },
+      left,
+      type,
+    });
+  }
+
+  parseStructFieldDec(): ast.VarDec | undefined {
+    const nameIdent = create(ast.Identifier, {
+      name: this.scanner.value,
+      range: {
+        start: this.getStart(),
+        end: this.getEnd(),
+      },
+    });
+
+    this.expect(Token.Identifier);
+
+    const dec = this.parseDec(nameIdent);
+    if (!dec || !(dec instanceof ast.VarDec)) {
+      this.diagnostics.error(`Struct fields must have Var Decs`, {
+        start: nameIdent.range.start,
+        end: this.getPrevEnd(),
+      });
+    }
+
+    return dec as ast.VarDec;
+  }
+
+  parseTraitDec(
+    nameIdent: ast.Identifier,
+    templateParams: ast.VarDec[]
+  ): ast.Trait | undefined {
+    this.nextToken(); // eat "trait"
+    this.expect(Token.LCurl);
+
+    const functions = this.parseList(Token.RCurl, () => this.parseTraitFnDec());
+
+    return create(ast.Trait, {
+      range: {
+        start: nameIdent.range.start,
+        end: this.getPrevEnd(),
+      },
+      functions,
+      templateParams,
+      name: nameIdent,
+    });
+  }
+
+  parseTraitFnDec(): ast.TraitFnDec | undefined {
+    if (this.token() != Token.Identifier) {
+      this.diagnostics.error(
+        `Expected Identifier, got ${Token[this.token()]}`,
+        {
+          start: this.getStart(),
+          end: this.getEnd(),
+        }
+      );
+      this.nextToken();
+      return;
+    }
+
+    const nameIdent = create(ast.Identifier, {
+      range: {
+        start: this.getStart(),
+        end: this.getEnd(),
+      },
+      name: this.scanner.value,
+    });
+
+    this.nextToken();
+
+    this.expect(Token.LParen);
+
+    const params = this.parseList(Token.RParen, () => this.parseFnParamDec());
+
+    this.expect(Token.Arrow);
+    const returns =
+      this.parseType() ||
+      create(ast.PlainType, {
+        range: NoRange,
+        templateParams: [],
+        name: "Void",
+      });
+
+    return create(ast.TraitFnDec, {
+      range: {
+        start: nameIdent.range.start,
+        end: returns.range.end,
+      },
+      params,
+      name: nameIdent,
+      returns,
+    });
   }
 
   parseIfStatement(): ast.IfStatement {
@@ -394,10 +578,6 @@ export class Parser {
 
   parseExpr(minprecedence: number = 0): ast.Expr {
     let expr = this.parseUnaryExpr();
-    return this.parseExpr1(expr);
-  }
-
-  parseExpr1(expr: ast.Expr, minprecedence: number = 0): ast.Expr {
     while (true) {
       const op = infixOperators[this.token()];
 
@@ -544,6 +724,33 @@ export class Parser {
       return this.parseUnaryExprIdent(name, start);
     }
 
+    if (this.token() == Token.TypeIdentifier) {
+      const type = this.parsePlainType();
+      if (this.token() == Token.LCurl) {
+        const expr = this.parseObjectLiteralExpr(type);
+        if (!expr) {
+          return create(ast.ErrorExpr, {
+            range: {
+              start,
+              end: this.getPrevEnd(),
+            },
+          });
+        }
+        return expr;
+      }
+      this.diagnostics.error(`Unexpected Token: ${Token[this.token()]}`, {
+        start,
+        end: this.getEnd(),
+      });
+      this.nextToken();
+      return create(ast.ErrorExpr, {
+        range: {
+          start,
+          end: this.getPrevEnd(),
+        },
+      });
+    }
+
     if (this.token() == Token.Mult) {
       this.nextToken();
       const expr = this.parseExpr();
@@ -554,6 +761,18 @@ export class Parser {
           end: expr.range.end,
         },
       });
+    }
+
+    if (this.token() == Token.String) {
+      const str = create(ast.String, {
+        range: {
+          start,
+          end: this.getEnd(),
+        },
+        str: this.scanner.value,
+      });
+      this.nextToken();
+      return str;
     }
 
     this.diagnostics.error(`Unexpected Token: ${Token[this.token()]}`, {
@@ -568,6 +787,54 @@ export class Parser {
         end: this.getEnd(),
       },
     });
+  }
+
+  parseObjectLiteralExpr(
+    type: ast.PlainType
+  ): ast.ObjectLiteralExpr | undefined {
+    this.nextToken(); // eat {
+    const entries = new Map(
+      this.parseList(Token.RCurl, () => this.parseObjectLiteralEntry())
+    );
+    return create(ast.ObjectLiteralExpr, {
+      range: {
+        start: type.range.start,
+        end: this.getPrevEnd(),
+      },
+      entries,
+      type,
+    });
+  }
+
+  parseObjectLiteralEntry():
+    | [string, { expr: ast.Expr; range: Range }]
+    | undefined {
+    if (this.token() != Token.Identifier) {
+      this.diagnostics.error(
+        `Unexpected Token: ${Token[this.token()]}, expected Identifier`,
+        {
+          start: this.getStart(),
+          end: this.getEnd(),
+        }
+      );
+      return;
+    }
+    const start = this.getStart();
+    const end = this.getEnd();
+    const name = this.scanner.value;
+    this.nextToken();
+    this.expect(Token.Colon);
+    const expr = this.parseExpr();
+    return [
+      name,
+      {
+        expr,
+        range: {
+          start,
+          end,
+        },
+      },
+    ];
   }
 
   parseUnaryExprIdent(name: string, start: Position): ast.Expr {
@@ -614,24 +881,7 @@ export class Parser {
     }
 
     if (this.token() == Token.TypeIdentifier) {
-      const start = this.getStart();
-      const name = this.scanner.value;
-      let templateParams = new Array<ast.Type>();
-      this.nextToken();
-      if (this.token() == Token.LessThan) {
-        this.nextToken();
-        templateParams = this.parseList(Token.GreaterThan, () =>
-          this.parseType()
-        );
-      }
-      return create(ast.PlainType, {
-        name,
-        templateParams,
-        range: {
-          start,
-          end: this.getPrevEnd(),
-        },
-      });
+      return this.parsePlainType();
     }
 
     this.diagnostics.error(
@@ -641,6 +891,27 @@ export class Parser {
         end: this.getEnd(),
       }
     );
+  }
+
+  parsePlainType(): ast.PlainType {
+    const start = this.getStart();
+    const name = this.scanner.value;
+    let templateParams = new Array<ast.Type>();
+    this.nextToken();
+    if (this.token() == Token.LessThan) {
+      this.nextToken();
+      templateParams = this.parseList(Token.GreaterThan, () =>
+        this.parseType()
+      );
+    }
+    return create(ast.PlainType, {
+      name,
+      templateParams,
+      range: {
+        start,
+        end: this.getPrevEnd(),
+      },
+    });
   }
 
   parseList<T>(closeToken: Token, kind: () => T | undefined): Array<T> {
@@ -668,7 +939,7 @@ export class Parser {
       }
 
       if (this.token() != Token.Comma && this.token() != Token.NewLine) {
-        this.diagnostics.error(`Unexpected ${Token[this.token()]}`, {
+        this.diagnostics.error(`parseList: Unexpected ${Token[this.token()]}`, {
           start: this.getStart(),
           end: this.getEnd(),
         });
