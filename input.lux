@@ -11,13 +11,13 @@ main: () => Integer {
       value: 0
     }
     return obj.value
- }
+}
 
- MyStruct<T: Type>: struct {
+MyStruct<T: Type>: struct {
     kind: T
     value: Integer
- }
+}
 
- Setter<T: Type>: trait {
+Setter<T: Type>: trait {
     run(param: T) => Void
- }
+}
